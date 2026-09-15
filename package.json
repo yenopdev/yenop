@@ -1,0 +1,33 @@
+{
+  "name": "yenop",
+  "version": "0.0.1",
+  "description": "The layer between an AI agent and the systems it can touch: tool-call authorization, human approval, run budgets, receipts.",
+  "license": "UNLICENSED",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "yenop": "./dist/cli/main.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -p tsconfig.json --watch",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@github-yenop:yenopdev/yenop.git"
+  },
+  "homepage": "https://yenop.com",
+  "dependencies": {
+    "@cedar-policy/cedar-wasm": "4.12.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.5",
+    "typescript": "5.9.3",
+    "vitest": "3.2.7"
+  }
+}

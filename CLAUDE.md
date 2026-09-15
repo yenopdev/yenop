@@ -14,6 +14,12 @@ Deterministic control plane for AI agents: tool-call authorization, human approv
 - MCP spec 2026-07-28 for gateway behavior; Cedar for policy; AuthZEN 1.0 for the decision API; RFC 8693 for delegation chains.
 - Success metric is containment rate under adaptive attack with utility preserved, never detection rate.
 
+## Build and test
+- `npm run build` compiles to `dist/`; `npm test` runs vitest; `npm run typecheck` for types only.
+- TypeScript, ESM, Node 22+. Cedar via `@cedar-policy/cedar-wasm` (nodejs build). Run state uses `node:sqlite`. No other runtime dependencies without a reason written in the PR.
+- Every policy has an `@id`. Evaluation errors fail closed. The Claude Code adapter only tightens: it prints nothing on allow.
+- This repo runs its own hook (`.claude/settings.local.json`, ignored by git). If a change breaks the hook, Claude Code in this repo will feel it first. Shell commands whose heredoc text mentions secret paths or pipe-to-shell will be denied; write such content with the file tool instead.
+
 ## Working agreements
 - Commit or push only when Ertunç asks.
 - Research and decisions live in `docs/`. The evidence dossier is at https://claude.ai/artifact/AmGhRXB8JTJSZSvXg4d4TX

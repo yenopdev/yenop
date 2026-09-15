@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/dist/cli/main.js\" hook claude-code",
+            "timeout": 15,
+            "statusMessage": "Yenop is checking this action"
+          }
+        ]
+      }
+    ]
+  }
+}
