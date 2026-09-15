@@ -26,9 +26,8 @@ export interface ClaudeCodeHookOutput {
   };
 }
 
-export function toDecisionRequest(input: ClaudeCodeHookInput, tenant: string): DecisionRequest {
+export function toDecisionRequest(input: ClaudeCodeHookInput): DecisionRequest {
   const req: DecisionRequest = {
-    tenant,
     runId: `claude-code:${input.session_id}`,
     principal: {
       runtime: "claude-code",
@@ -81,7 +80,7 @@ export async function runHook(raw: string): Promise<HookRunResult> {
   if (!input.tool_name || !input.session_id) return { stdout: "", exitCode: 0 };
   const yenop = openYenop(input.cwd !== undefined ? { cwd: input.cwd } : {});
   try {
-    const decision = yenop.decide(toDecisionRequest(input, yenop.config.tenant));
+    const decision = yenop.decide(toDecisionRequest(input));
     // Observe mode: the decision and receipt exist, but the runtime is never told.
     if (yenop.config.mode === "observe") return { stdout: "", exitCode: 0 };
     return renderHookResult(decision.effect, decision.message);

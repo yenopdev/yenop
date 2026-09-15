@@ -1,5 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync, realpathSync } from "node:fs";
 import { join } from "node:path";
+import { execFileSync } from "node:child_process";
 
 interface HookEntry {
   type: "command";
@@ -18,6 +19,21 @@ interface Settings {
 
 /** Any command that ends in this is ours, whatever path the CLI lives at. */
 export const YENOP_HOOK_MARKER = "hook claude-code";
+
+/**
+ * The command Claude Code should run. When `yenop` on PATH is this very build (a global npm
+ * install or `npm link`), use the short form so the settings file carries no machine path.
+ * Otherwise fall back to node plus the absolute path of this build.
+ */
+export function hookCommandFor(cliPath: string): string {
+  try {
+    const which = execFileSync("sh", ["-lc", "command -v yenop"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+    if (which && realpathSync(which) === realpathSync(cliPath)) return "yenop hook claude-code";
+  } catch {
+    /* not on PATH */
+  }
+  return `node ${JSON.stringify(cliPath)} hook claude-code`;
+}
 
 /**
  * Add the Yenop PreToolUse hook to a Claude Code settings file.

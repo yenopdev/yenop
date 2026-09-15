@@ -1,60 +1,20 @@
+// yenop baseline pack, vocabulary v1. Do not edit in place: add your own files in
+// ~/.yenop/policies or <project>/.yenop/policies, and switch a rule off with
+// "disabledPolicies" in config.json.
+//
 // Must a person see this first? A permit here means "ask".
 
 @id("destructive-shell")
 permit (principal, action == Yenop::Action::"call", resource)
-when {
-  resource.kind == "shell" && context.args has command &&
-  ( context.args.command like "*rm -r*" ||
-    context.args.command like "*rm -f*" ||
-    context.args.command like "*rm -Rf*" ||
-    context.args.command like "*rmdir *" ||
-    context.args.command like "*terraform destroy*" ||
-    context.args.command like "*terraform apply*" ||
-    context.args.command like "*pulumi destroy*" ||
-    context.args.command like "*git push*--force*" ||
-    context.args.command like "*git push*-f *" ||
-    context.args.command like "*git reset --hard*" ||
-    context.args.command like "*git clean*" ||
-    context.args.command like "*git branch -D*" ||
-    context.args.command like "*DROP TABLE*" ||
-    context.args.command like "*DROP DATABASE*" ||
-    context.args.command like "*DROP SCHEMA*" ||
-    context.args.command like "*DELETE FROM*" ||
-    context.args.command like "*TRUNCATE*" ||
-    context.args.command like "*kubectl delete*" ||
-    context.args.command like "*helm uninstall*" ||
-    context.args.command like "*docker rm*" ||
-    context.args.command like "*docker system prune*" ||
-    context.args.command like "*aws * delete*" ||
-    context.args.command like "*aws * terminate*" ||
-    context.args.command like "*gcloud * delete*" ||
-    context.args.command like "*az * delete*" ||
-    context.args.command like "*sudo *" ||
-    context.args.command like "*chmod -R*" ||
-    context.args.command like "*chown -R*" ||
-    context.args.command like "*mkfs*" ||
-    context.args.command like "*> /dev/*" )
-};
+when { context has shell && context.shell.destructive };
 
 @id("outbound-writes-from-shell")
 permit (principal, action == Yenop::Action::"call", resource)
-when {
-  resource.kind == "shell" && context.args has command &&
-  ( context.args.command like "*curl*-X POST*" ||
-    context.args.command like "*curl*-X PUT*" ||
-    context.args.command like "*curl*-X DELETE*" ||
-    context.args.command like "*curl*-X PATCH*" ||
-    context.args.command like "*curl*--data*" ||
-    context.args.command like "*curl*-d *" ||
-    context.args.command like "*wget*--post*" ||
-    context.args.command like "*ssh *" ||
-    context.args.command like "*scp *" ||
-    context.args.command like "*rsync *" ||
-    context.args.command like "*npm publish*" ||
-    context.args.command like "*git push*" ||
-    context.args.command like "*gh pr merge*" ||
-    context.args.command like "*gh release*" )
-};
+when { context has shell && context.shell.outbound };
+
+@id("sudo")
+permit (principal, action == Yenop::Action::"call", resource)
+when { context has shell && context.shell.sudo };
 
 @id("mcp-writes")
 permit (principal, action == Yenop::Action::"call", resource)

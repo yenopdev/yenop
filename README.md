@@ -11,14 +11,25 @@ Yenop decides which tool calls actually execute, who approved the ones that cann
 
 Status: pre-alpha. First enforcement point: Claude Code. Next: an MCP gateway and adapters for the OpenAI Agents SDK, LangGraph and n8n. Same core, same policies, same receipts for all of them.
 
-## Try it in two minutes
+## Install
+
+From npm, once published:
 
 ```sh
-npm install && npm run build
-node dist/cli/main.js init        # creates ~/.yenop with the default policies, installs the Claude Code hook for this project
-node dist/cli/main.js check       # parses every policy
-node dist/cli/main.js explain Bash '{"command":"terraform destroy -auto-approve"}'
+npm install -g yenop
+yenop init            # sets up ~/.yenop and installs the Claude Code hook for the current project
 ```
+
+From source, today:
+
+```sh
+npm install && npm run build && npm link     # makes the `yenop` command available on this machine
+yenop init
+yenop check                                  # every policy, every layer, checked against the vocabulary
+yenop explain Bash '{"command":"terraform destroy -auto-approve"}'
+```
+
+When `yenop` is on the PATH, the hook is installed as `yenop hook claude-code`, so no machine-specific path ends up in any settings file.
 
 From then on, every tool call Claude Code makes in this project passes through Yenop first:
 
@@ -26,7 +37,7 @@ From then on, every tool call Claude Code makes in this project passes through Y
 |---|---|
 | `npm test`, reading a source file | nothing; Claude Code's normal flow applies |
 | `terraform destroy`, `DROP TABLE`, a forced push, writing outside the project, any MCP tool that writes | **ask**: Claude Code shows the exact action and waits for you |
-| reading a private key or `.env`, piping a download straight into a shell | **deny**: blocked, with the policy named |
+| reading a private key or `.env`, piping a download straight into a shell, sending a credential over the network | **deny**: blocked, with the policy named |
 | a run that has been denied 20 times, or has made 1,000 calls | **deny**: the breaker halts the run |
 
 Receipts: `node dist/cli/main.js receipts --last 20`. Raw file: `~/.yenop/receipts.jsonl`.
@@ -56,7 +67,22 @@ Open that folder in Claude Code and ask it to delete the build folder, run terra
 tool call → budget breakers → permit policies → approval policies → receipt → allow / deny / ask
 ```
 
-Policies live in `~/.yenop/policies/` (copied from [`policies/`](policies/) on init) and optionally in `<project>/.yenop/policies/`. Two folders, two questions: `permit/` asks "may this happen at all", `approve/` asks "must a person see it first". See [policies/README.md](policies/README.md) for what a policy can see. Any evaluation error fails closed to deny.
+Shell commands are parsed, not pattern-matched. Yenop splits a command into its programs and arguments, follows `sudo`, `xargs`, `bash -c` and `$(...)`, ignores heredoc bodies and comments, and exposes facts such as `context.shell.destructive`, `context.shell.pipesToShell`, `context.shell.secretPath`, `context.shell.ops` and `context.shell.programs`. A README that mentions `rm -rf` is a write to a README. A public key is not a secret. Secret-file patterns are configurable with `secretPatterns` in any `config.json`.
+
+Policies come in layers that are evaluated together: the **baseline** shipped in [`policies/`](policies/) and updated with each release, your **home** layer in `~/.yenop/policies/`, and a **project** layer in `<project>/.yenop/policies/` committed with the code. Add a file to tighten. To loosen a baseline rule, switch it off by id with `"disabledPolicies": ["..."]` in a `config.json`; the shipped files are never edited in place. Two folders, two questions: `permit/` asks "may this happen at all", `approve/` asks "must a person see it first". See [policies/README.md](policies/README.md) for the full contract. Any evaluation error fails closed to deny.
+
+The names a policy can use are frozen in [`policies/schema.cedarschema`](policies/schema.cedarschema). Every policy in every layer is validated against it when loaded; a misspelled attribute is an error with a suggestion, and a policy that can never apply is rejected too. Arguments of tools not typed in the schema are reachable as tags: `context.call.getTag("repo") == "acme/prod"`.
+
+## Formats and versions
+
+| Thing | Version field | Where |
+|---|---|---|
+| Receipts | `v` on every line | `~/.yenop/receipts.jsonl` |
+| Config files | `v` | `~/.yenop/config.json`, `<project>/.yenop/config.json` |
+| State database | `PRAGMA user_version` | `~/.yenop/state.db` |
+| Policy vocabulary | comment header | `policies/schema.cedarschema` |
+
+A newer file than the running Yenop understands is an error, never a silent misread. Tenants have a stable id (`tn_` plus 26 characters) that never changes once issued; the name is free to change.
 
 ## Layout
 

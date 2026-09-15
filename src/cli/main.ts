@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
-import { cpSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { builtinPoliciesDir, checkPolicies, loadPolicies, openYenop, readReceipts, classifyTool, type DecisionRequest } from "../core/index.js";
+import { builtinPoliciesDir, checkPolicies, loadPolicies, openYenop, readReceipts, classifyTool, newTenantId, CONFIG_VERSION, type DecisionRequest } from "../core/index.js";
 import { runHook, readStdin } from "../adapters/claude-code/hook.js";
-import { installClaudeCodeHook } from "../adapters/claude-code/install.js";
+import { installClaudeCodeHook, hookCommandFor } from "../adapters/claude-code/install.js";
 
 const USAGE = `yenop — the layer between an AI agent and the systems it can touch
 
@@ -52,7 +52,6 @@ async function main(argv: string[]): Promise<number> {
       const y = openYenop({ cwd: process.cwd(), dryRun: true });
       try {
         const d = y.decide({
-          tenant: y.config.tenant,
           runId: `explain:${Date.now()}`,
           principal: { runtime: "cli", agent: "explain", user: "you" },
           tool: classifyTool(tool),
@@ -70,10 +69,13 @@ async function main(argv: string[]): Promise<number> {
     case "check": {
       const y = openYenop({ cwd: process.cwd(), dryRun: true });
       try {
-        const bundle = loadPolicies(y.config.policyDirs);
+        const bundle = loadPolicies(y.config.policyLayers, { disabled: y.config.disabledPolicies });
         checkPolicies(bundle);
-        const n = (o: object) => Object.keys(o).length;
-        process.stdout.write(`ok: ${n(bundle.permit)} permit policies, ${n(bundle.approve)} approval policies from ${y.config.policyDirs.join(", ")}\n`);
+        for (const l of bundle.layers) process.stdout.write(`${pad(l.name, 9)} ${l.permit} permit, ${l.approve} approval   ${l.dir}\n`);
+        const off = Object.keys(bundle.disabled);
+        process.stdout.write(off.length ? `disabled  ${off.join(", ")}\n` : `disabled  none\n`);
+        for (const w of bundle.warnings) process.stdout.write(`warning   ${w}\n`);
+        process.stdout.write(`ok: every policy matches the vocabulary (policies/schema.cedarschema)\n`);
         return 0;
       } finally {
         y.close();
@@ -93,7 +95,8 @@ async function main(argv: string[]): Promise<number> {
         for (const r of rows) {
           const summary = summarizeArgs(r.args);
           const tag = r.mode === "observe" ? "  (observe)" : r.enforced ? "" : "  (not enforced)";
-          process.stdout.write(`${r.ts}  ${pad(r.tenant, 10)} ${pad(r.effect.toUpperCase(), 5)}  ${pad(r.tool, 20)} ${summary}  [${r.reasons.join(", ")}]${tag}\n`);
+          const tenantName = typeof r.tenant === "string" ? r.tenant : r.tenant.name;
+          process.stdout.write(`${r.ts}  ${pad(tenantName, 10)} ${pad(r.effect.toUpperCase(), 5)}  ${pad(r.tool, 20)} ${summary}  [${r.reasons.join(", ")}]${tag}\n`);
         }
         return 0;
       } finally {
@@ -109,21 +112,28 @@ async function main(argv: string[]): Promise<number> {
       const home = process.env["YENOP_HOME"] ?? join(homedir(), ".yenop");
       mkdirSync(home, { recursive: true });
       const policies = join(home, "policies");
-      if (!existsSync(policies)) {
-        cpSync(builtinPoliciesDir(), policies, { recursive: true });
-        process.stdout.write(`created ${policies} with the default policy pack\n`);
-      } else {
-        process.stdout.write(`kept existing ${policies}\n`);
+      migrateCopiedBaseline(policies);
+      for (const which of ["permit", "approve"] as const) {
+        const dir = join(policies, which);
+        mkdirSync(dir, { recursive: true });
+        const local = join(dir, "local.cedar");
+        if (!existsSync(local)) writeFileSync(local, LOCAL_TEMPLATE[which]);
       }
+      writeFileSync(join(policies, "README.md"), readFileSync(join(builtinPoliciesDir(), "README.md"), "utf8"));
+      process.stdout.write(`policies: baseline comes from the package; your own rules go in ${policies}/{permit,approve}/\n`);
       const cfg = join(home, "config.json");
       if (!existsSync(cfg)) {
-        writeFileSync(cfg, JSON.stringify({ tenant: "local", mode: values.mode, budgets: { maxStepsPerRun: 1000, maxDeniesPerRun: 20 } }, null, 2) + "\n");
+        writeFileSync(
+          cfg,
+          JSON.stringify({ v: CONFIG_VERSION, tenant: { id: newTenantId(), name: "local" }, mode: values.mode, budgets: { maxStepsPerRun: 1000, maxDeniesPerRun: 20 }, disabledPolicies: [], secretPatterns: [] }, null, 2) + "\n",
+        );
         process.stdout.write(`created ${cfg}\n`);
+      } else {
+        upgradeConfig(cfg);
       }
       if (!values["no-hook"]) {
         const settingsPath = values.user ? join(homedir(), ".claude", "settings.json") : join(process.cwd(), ".claude", "settings.local.json");
-        const cliPath = fileURLToPath(import.meta.url);
-        const command = `node ${JSON.stringify(cliPath)} hook claude-code`;
+        const command = hookCommandFor(fileURLToPath(import.meta.url));
         const r = installClaudeCodeHook(settingsPath, command);
         process.stdout.write(`${r.changed ? "installed" : "already installed"} Claude Code hook in ${r.path}\n`);
       }
@@ -134,8 +144,9 @@ async function main(argv: string[]): Promise<number> {
       try {
         const c = y.config;
         process.stdout.write(`mode:      ${c.mode}${process.env["YENOP_MODE"] ? " (from YENOP_MODE)" : ""}\n`);
-        process.stdout.write(`tenant:    ${c.tenant}\n`);
-        process.stdout.write(`policies:  ${c.policyDirs.join(", ")}\n`);
+        process.stdout.write(`tenant:    ${c.tenant.name} (${c.tenant.id})\n`);
+        for (const l of c.policyLayers) process.stdout.write(`${pad(l.name === "baseline" ? "policies:" : "", 10)} ${pad(l.name, 9)} ${l.dir}\n`);
+        if (c.disabledPolicies.length) process.stdout.write(`disabled:  ${c.disabledPolicies.join(", ")}\n`);
         process.stdout.write(`receipts:  ${c.receiptsPath}\n`);
         process.stdout.write(`state:     ${c.statePath}\n`);
         process.stdout.write(`budgets:   ${c.budgets.maxStepsPerRun} steps, ${c.budgets.maxDeniesPerRun} denies per run\n`);
@@ -146,8 +157,7 @@ async function main(argv: string[]): Promise<number> {
     }
     case "playground": {
       const dir = resolve(rest[0] ?? join(homedir(), "yenop-playground"));
-      const cliPath = fileURLToPath(import.meta.url);
-      writePlayground(dir, `node ${JSON.stringify(cliPath)} hook claude-code`);
+      writePlayground(dir, hookCommandFor(fileURLToPath(import.meta.url)));
       process.stdout.write(`playground ready at ${dir} (enforce mode)\n`);
       process.stdout.write(`open that folder in Claude Code and try:\n`);
       process.stdout.write(`  - "delete the build folder with rm -rf"          -> Yenop asks\n`);
@@ -167,6 +177,60 @@ async function main(argv: string[]): Promise<number> {
   }
 }
 
+const LOCAL_TEMPLATE = {
+  permit: `// Your own "may this happen at all" rules. The baseline pack is loaded automatically underneath.
+// A forbid here wins over every permit. Give each policy its own @id so receipts can name it.
+//
+// @id("no-prod-db-from-agents")
+// forbid (principal, action, resource)
+// when { context.args has command && context.args.command like "*prod-db.internal*" };
+`,
+  approve: `// Your own "must a person see this first" rules. A permit here means: allowed, but ask.
+//
+// @id("payments-api")
+// permit (principal, action == Yenop::Action::"call", resource)
+// when { context.args has command && context.args.command like "*api.stripe.com*" };
+`,
+};
+
+/** Bring an older config.json up to the current shape without losing anything the user set. */
+function upgradeConfig(path: string): void {
+  const raw = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+  let changed = false;
+  if (raw["v"] === undefined) {
+    raw["v"] = CONFIG_VERSION;
+    changed = true;
+  }
+  if (typeof raw["tenant"] === "string" || raw["tenant"] === undefined) {
+    raw["tenant"] = { id: newTenantId(), name: (raw["tenant"] as string | undefined) ?? "local" };
+    changed = true;
+  }
+  if (changed) {
+    writeFileSync(path, JSON.stringify(raw, null, 2) + "\n");
+    process.stdout.write(`upgraded ${path} to config version ${CONFIG_VERSION} (tenant now has a stable id)\n`);
+  }
+}
+
+/** Comments and whitespace do not make a policy file different. */
+function policyText(src: string): string {
+  return src.split("\n").filter((l) => !l.trim().startsWith("//")).join(" ").replace(/\s+/g, " ").trim();
+}
+
+/** Installs before 0.0.2 copied the shipped pack into the home layer. Remove untouched copies so ids do not collide. */
+function migrateCopiedBaseline(policiesDir: string): void {
+  for (const which of ["permit", "approve"] as const) {
+    const copy = join(policiesDir, which, "default.cedar");
+    if (!existsSync(copy)) continue;
+    const shipped = join(builtinPoliciesDir(), which, "default.cedar");
+    if (existsSync(shipped) && policyText(readFileSync(copy, "utf8")) === policyText(readFileSync(shipped, "utf8"))) {
+      rmSync(copy);
+      process.stdout.write(`migrated: removed ${copy} (identical to the shipped baseline, which is now loaded from the package)\n`);
+    } else {
+      process.stdout.write(`note: ${copy} differs from the shipped baseline; rename its @ids or use disabledPolicies to avoid collisions\n`);
+    }
+  }
+}
+
 function writePlayground(dir: string, hookCommand: string): void {
   const w = (rel: string, content: string) => {
     const p = join(dir, rel);
@@ -174,7 +238,7 @@ function writePlayground(dir: string, hookCommand: string): void {
     writeFileSync(p, content);
   };
   w("README.md", "# Yenop playground\n\nA fake project for testing Yenop under enforcement. Nothing here is real. Delete the folder when done.\n");
-  w(".yenop/config.json", JSON.stringify({ tenant: "playground", mode: "enforce" }, null, 2) + "\n");
+  w(".yenop/config.json", JSON.stringify({ v: CONFIG_VERSION, tenant: { id: newTenantId(), name: "playground" }, mode: "enforce" }, null, 2) + "\n");
   w("package.json", JSON.stringify({ name: "playground", private: true, scripts: { test: "node -e \"console.log('tests: 3 passed')\"", build: "mkdir -p build && echo built > build/out.txt" } }, null, 2) + "\n");
   w("build/out.txt", "built\n");
   w("infra/main.tf", 'resource "aws_db_instance" "prod" {\n  identifier = "prod-db"\n  allocated_storage = 100\n}\n');

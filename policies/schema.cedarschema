@@ -1,0 +1,74 @@
+// Yenop policy vocabulary, version 1.
+// This file is the contract between Yenop and every policy written against it.
+// Renaming or removing anything here is a breaking change. Adding optional attributes is not.
+namespace Yenop {
+  // Who is acting: "<runtime>/<agent>", e.g. "claude-code/main".
+  entity Agent = {
+    runtime: String,
+    agent: String,
+    user: String,
+  };
+
+  // What is being called. kind: read | write | shell | web | mcp | unknown.
+  entity Tool = {
+    name: String,
+    kind: String,
+    readOnly: Bool,
+    server?: String,
+  };
+
+  // The call itself. Every tool argument is available as a string tag,
+  // for tools whose arguments are not typed below: context.call.getTag("repo") == "prod".
+  entity Call tags String;
+
+  // Facts parsed from a shell command (present only when the tool runs a shell).
+  type Shell = {
+    programs: Set<String>,
+    ops: Set<String>,
+    paths: Set<String>,
+    envRefs: Set<String>,
+    sql: Set<String>,
+    commandCount: Long,
+    heredoc: Bool,
+    sudo: Bool,
+    pipesToShell: Bool,
+    secretPath: Bool,
+    secretEnv: Bool,
+    network: Bool,
+    outbound: Bool,
+    destructive: Bool,
+  };
+
+  // Facts derived from a file argument (present when the tool takes a path).
+  type Derived = {
+    insideProject?: Bool,
+    absolutePath?: String,
+    secretPath?: Bool,
+  };
+
+  action call appliesTo {
+    principal: [Agent],
+    resource: [Tool],
+    context: {
+      // Common arguments, typed. Anything else is reachable through context.call tags.
+      args: {
+        command?: String,
+        file_path?: String,
+        path?: String,
+        notebook_path?: String,
+        content?: String,
+        url?: String,
+        query?: String,
+        pattern?: String,
+        description?: String,
+        prompt?: String,
+      },
+      call: Call,
+      run: { steps: Long },
+      cwd: String,
+      permissionMode: String,
+      derived: Derived,
+      shell?: Shell,
+    }
+  };
+}

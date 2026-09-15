@@ -9,10 +9,15 @@ import type { Decision, DecisionRequest, ReceiptSink, RunStateStore } from "./ty
 
 export * from "./types.js";
 export { classifyTool } from "./tools.js";
-export { loadConfig, DEFAULT_BUDGETS, type Mode, type YenopConfig } from "./config.js";
+export { loadConfig, DEFAULT_BUDGETS, type Mode, type YenopConfig, type PolicyLayer } from "./config.js";
 export { loadPolicies, checkPolicies, evaluate, toCedarValue } from "./policy.js";
+export { RECEIPT_VERSION } from "./types.js";
 export { decide } from "./engine.js";
-export { uuidv7, uuidv7Time } from "./ids.js";
+export { uuidv7, uuidv7Time, newTenantId } from "./ids.js";
+export { analyzeShell, matchesSecretPattern, DEFAULT_SECRET_PATTERNS, type ShellFacts } from "./shell.js";
+export { loadSchema, validateAgainstSchema } from "./policy.js";
+export { CONFIG_VERSION, resolveTenant, localTenantId } from "./config.js";
+export { STATE_VERSION } from "./state.js";
 export { SqliteRunState, MemoryRunState } from "./state.js";
 export { JsonlReceipts, NullReceipts, readReceipts } from "./receipts.js";
 
@@ -47,7 +52,8 @@ export function openYenop(opts: OpenOptions = {}): Yenop {
   const deps: EngineDeps = {
     tenant: config.tenant,
     mode: config.mode,
-    policies: loadPolicies(config.policyDirs),
+    policies: loadPolicies(config.policyLayers, { disabled: config.disabledPolicies }),
+    secretPatterns: config.secretPatterns,
     budgets: config.budgets,
     state: opts.state ?? (opts.dryRun ? new MemoryRunState() : new SqliteRunState(config.statePath)),
     receipts: opts.receipts ?? (opts.dryRun ? new NullReceipts() : new JsonlReceipts(config.receiptsPath)),

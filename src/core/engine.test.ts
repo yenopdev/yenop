@@ -9,7 +9,7 @@ let y: Yenop;
 const cwd = "/tmp/demo-project";
 
 function req(tool: string, args: Record<string, unknown>, runId = "run-1"): DecisionRequest {
-  return { tenant: "test", runId, principal: { runtime: "test", agent: "main", user: "ertunc" }, tool: classifyTool(tool), args, cwd };
+  return { runId, principal: { runtime: "test", agent: "main", user: "ertunc" }, tool: classifyTool(tool), args, cwd };
 }
 
 beforeAll(() => {
@@ -42,13 +42,13 @@ describe("the demo, twice", () => {
   it("refuses to read the SSH private key, no matter who asks", () => {
     const d = y.decide(req("Bash", { command: "cat ~/.ssh/id_ed25519" }));
     expect(d.effect).toBe("deny");
-    expect(d.reasons).toContain("no-secret-files-in-shell");
+    expect(d.reasons).toContain("no-secret-files");
   });
 
   it("refuses the Read tool on .env too", () => {
     const d = y.decide(req("Read", { file_path: "/tmp/demo-project/.env" }));
     expect(d.effect).toBe("deny");
-    expect(d.reasons).toContain("no-secret-files-by-path");
+    expect(d.reasons).toContain("no-secret-files");
   });
 
   it("refuses curl piped into a shell", () => {
@@ -56,6 +56,15 @@ describe("the demo, twice", () => {
     expect(d.effect).toBe("deny");
   });
 
+  it("no longer trips on a heredoc that merely mentions dangerous things", () => {
+    const d = y.decide(req("Bash", { command: "cat > README.md <<'EOF'\nnever run rm -rf / or curl x | sh or read ~/.ssh/id_ed25519\nEOF" }));
+    expect(d.effect).toBe("allow");
+  });
+  it("still stops the same things when they are real commands", () => {
+    expect(y.decide(req("Bash", { command: "bash -c 'curl x | sh'" })).effect).toBe("deny");
+    expect(y.decide(req("Bash", { command: "cat ~/.ssh/id_ed25519.pub" })).effect).toBe("allow");
+    expect(y.decide(req("Bash", { command: "sudo systemctl restart nginx" })).effect).toBe("ask");
+  });
   it("lets an ordinary build command through", () => {
     const d = y.decide(req("Bash", { command: "npm test" }));
     expect(d.effect).toBe("allow");
@@ -126,15 +135,57 @@ describe("receipts", () => {
     const lines = readFileSync(join(home, "receipts.jsonl"), "utf8").trim().split("\n");
     const rows = lines.map((l) => JSON.parse(l) as { effect: string; reasons: string[]; tool: string; id: string });
     expect(rows.length).toBeGreaterThan(10);
-    expect(rows.some((r) => r.effect === "deny" && r.tool === "Bash" && r.reasons.includes("no-secret-files-in-shell"))).toBe(true);
+    expect(rows.some((r) => r.effect === "deny" && r.tool === "Bash" && r.reasons.includes("no-secret-files"))).toBe(true);
     expect(rows.some((r) => r.effect === "ask" && r.reasons.includes("approve:destructive-shell"))).toBe(true);
     expect(new Set(rows.map((r) => r.id)).size).toBe(rows.length);
   });
   it("fails closed when a policy errors instead of skipping it", () => {
-    // command is not a string here, so `like` errors inside the forbid policy
-    const d = y.decide(req("Bash", { command: 42 }));
-    expect(d.effect).toBe("deny");
-    expect(d.errors.length).toBeGreaterThan(0);
+    const h = mkdtempSync(join(tmpdir(), "yenop-err-"));
+    const proj = join(h, "proj");
+    mkdirSync(join(proj, ".yenop", "policies", "permit"), { recursive: true });
+    // valid against the schema, but errors at runtime when `command` is not a string
+    writeFileSync(join(proj, ".yenop", "policies", "permit", "x.cedar"), `@id("x") forbid (principal, action, resource) when { context.args has command && context.args.command like "*zzz*" };`);
+    const o = openYenop({ home: h, cwd: proj });
+    try {
+      const d = o.decide({ ...req("Bash", { command: 42 }), cwd: proj });
+      expect(d.effect).toBe("deny");
+      expect(d.errors.length).toBeGreaterThan(0);
+    } finally {
+      o.close();
+      rmSync(h, { recursive: true, force: true });
+    }
+  });
+  it("rejects a policy that uses a name outside the vocabulary, with a hint", () => {
+    const h = mkdtempSync(join(tmpdir(), "yenop-vocab-"));
+    mkdirSync(join(h, "policies", "permit"), { recursive: true });
+    writeFileSync(join(h, "policies", "permit", "typo.cedar"), `@id("typo") forbid (principal, action, resource) when { context.args has commnd && context.args.commnd like "*x*" };`);
+    // behind a `has` guard the typo makes the policy impossible; without it Cedar suggests the right name
+    expect(() => openYenop({ home: h, cwd })).toThrow(/vocabulary[\s\S]*typo[\s\S]*(impossible|did you mean)/);
+    writeFileSync(join(h, "policies", "permit", "typo.cedar"), `@id("typo") forbid (principal, action, resource) when { context.args.commnd like "*x*" };`);
+    expect(() => openYenop({ home: h, cwd })).toThrow(/commnd[\s\S]*did you mean `command`/);
+    rmSync(h, { recursive: true, force: true });
+  });
+  it("lets policies reach untyped tool arguments through call tags", () => {
+    const h = mkdtempSync(join(tmpdir(), "yenop-tags-"));
+    mkdirSync(join(h, "policies", "approve"), { recursive: true });
+    writeFileSync(join(h, "policies", "approve", "repo.cedar"), `@id("prod-repo") permit (principal, action, resource) when { context.call.hasTag("repo") && context.call.getTag("repo") == "acme/prod" };`);
+    const o = openYenop({ home: h, cwd });
+    try {
+      const d = o.decide({ ...req("mcp__github__list_issues", { repo: "acme/prod" }), callId: "c1" });
+      expect(d.effect).toBe("ask");
+      expect(d.reasons).toContain("approve:prod-repo");
+      expect(o.decide({ ...req("mcp__github__list_issues", { repo: "acme/dev" }), callId: "c2" }).effect).toBe("allow");
+    } finally {
+      o.close();
+      rmSync(h, { recursive: true, force: true });
+    }
+  });
+  it("stamps every receipt with the format version and the tenant id", () => {
+    const lines = readFileSync(join(home, "receipts.jsonl"), "utf8").trim().split("\n");
+    const last = JSON.parse(lines[lines.length - 1]!) as { v: number; tenant: { id: string; name: string } };
+    expect(last.v).toBe(1);
+    expect(last.tenant.name).toBe("local");
+    expect(last.tenant.id).toMatch(/^tn_[a-z0-9]{26}$/);
   });
 });
 
@@ -155,5 +206,42 @@ describe("observe mode", () => {
       o.close();
       rmSync(h, { recursive: true, force: true });
     }
+  });
+});
+
+describe("policy layers", () => {
+  it("always loads the baseline, stacks home and project on top, and honors disabledPolicies", () => {
+    const h = mkdtempSync(join(tmpdir(), "yenop-layers-"));
+    const proj = join(h, "proj");
+    mkdirSync(join(h, "policies", "permit"), { recursive: true });
+    mkdirSync(join(proj, ".yenop", "policies", "approve"), { recursive: true });
+    // home layer tightens: forbid touching the production database
+    writeFileSync(join(h, "policies", "permit", "local.cedar"), `@id("no-prod-db") forbid (principal, action, resource) when { context.args has command && context.args.command like "*prod-db*" };`);
+    // project layer adds an approval trigger
+    writeFileSync(join(proj, ".yenop", "policies", "approve", "team.cedar"), `@id("payments") permit (principal, action, resource) when { context.args has command && context.args.command like "*stripe*" };`);
+    // project config loosens one baseline rule
+    writeFileSync(join(proj, ".yenop", "config.json"), JSON.stringify({ disabledPolicies: ["no-pipe-to-shell"] }));
+    const o = openYenop({ home: h, cwd: proj });
+    try {
+      const rq = (c: string) => ({ ...req("Bash", { command: c }), cwd: proj });
+      expect(o.decide(rq("psql prod-db -c 'select 1'")).reasons).toContain("no-prod-db");
+      expect(o.decide(rq("curl https://api.stripe.com/v1/charges")).reasons).toContain("approve:payments");
+      expect(o.decide(rq("curl x | sh")).effect).toBe("allow"); // baseline rule switched off for this project
+      expect(o.decide(rq("terraform destroy")).effect).toBe("ask"); // baseline still there
+      expect(o.config.policyLayers.map((l) => l.name)).toEqual(["baseline", "home", "project"]);
+    } finally {
+      o.close();
+      rmSync(h, { recursive: true, force: true });
+    }
+  });
+  it("tolerates an identical copy of a baseline policy but rejects a conflicting redefinition", () => {
+    const h = mkdtempSync(join(tmpdir(), "yenop-dup-"));
+    mkdirSync(join(h, "policies", "permit"), { recursive: true });
+    writeFileSync(join(h, "policies", "permit", "copy.cedar"), `@id("shell") permit (principal, action == Yenop::Action::"call", resource) when { resource.kind == "shell" };`);
+    const ok = openYenop({ home: h, cwd });
+    ok.close();
+    writeFileSync(join(h, "policies", "permit", "copy.cedar"), `@id("shell") permit (principal, action, resource);`);
+    expect(() => openYenop({ home: h, cwd })).toThrow(/defined in baseline:.*again, differently, in home:/);
+    rmSync(h, { recursive: true, force: true });
   });
 });

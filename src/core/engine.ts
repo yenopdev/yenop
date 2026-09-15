@@ -3,10 +3,13 @@ import { isAbsolute, resolve, sep } from "node:path";
 import type { BudgetLimits, Decision, DecisionRequest, Effect, PolicyBundle, Receipt, ReceiptSink, RunStateStore } from "./types.js";
 import { evaluate, type EvalInput } from "./policy.js";
 import { trimForReceipt } from "./receipts.js";
+import { analyzeShell, matchesSecretPattern } from "./shell.js";
+import { RECEIPT_VERSION } from "./types.js";
 
 export interface EngineDeps {
-  tenant: string;
+  tenant: import("./types.js").TenantRef;
   mode: "enforce" | "observe";
+  secretPatterns: string[];
   policies: PolicyBundle;
   budgets: BudgetLimits;
   state: RunStateStore;
@@ -15,14 +18,17 @@ export interface EngineDeps {
 }
 
 /** Facts derived from the request so policies can stay declarative. */
-function derive(req: DecisionRequest): Record<string, string | number | boolean> {
+function derive(req: DecisionRequest, secretPatterns: string[]): Record<string, string | number | boolean> {
   const out: Record<string, string | number | boolean> = {};
   const p = req.args["file_path"] ?? req.args["path"] ?? req.args["notebook_path"];
-  if (typeof p === "string" && req.cwd) {
-    const abs = isAbsolute(p) ? p : resolve(req.cwd, p);
-    const root = resolve(req.cwd) + sep;
-    out["insideProject"] = abs === resolve(req.cwd) || abs.startsWith(root);
+  if (typeof p === "string") {
+    const abs = isAbsolute(p) ? p : resolve(req.cwd ?? process.cwd(), p);
+    if (req.cwd) {
+      const root = resolve(req.cwd) + sep;
+      out["insideProject"] = abs === resolve(req.cwd) || abs.startsWith(root);
+    }
     out["absolutePath"] = abs;
+    out["secretPath"] = matchesSecretPattern(abs, secretPatterns);
   }
   return out;
 }
@@ -37,10 +43,10 @@ function derive(req: DecisionRequest): Record<string, string | number | boolean>
 export function decide(deps: EngineDeps, req: DecisionRequest): Decision {
   const t0 = process.hrtime.bigint();
   if (req.callId !== undefined) {
-    const seen = deps.state.recallCall(deps.tenant, req.runId, req.callId);
+    const seen = deps.state.recallCall(deps.tenant.id, req.runId, req.callId);
     if (seen) return { ...seen, replayed: true };
   }
-  const before = deps.state.peek(deps.tenant, req.runId);
+  const before = deps.state.peek(deps.tenant.id, req.runId);
   const steps = before.steps + 1;
   const reasons: string[] = [];
   const errors: string[] = [];
@@ -56,7 +62,9 @@ export function decide(deps: EngineDeps, req: DecisionRequest): Decision {
     reasons.push("breaker:max-denies");
     message = `Run hit ${deps.budgets.maxDeniesPerRun} denied calls; Yenop halted further actions.`;
   } else {
-    const input: EvalInput = { req, steps, derived: derive(req) };
+    const input: EvalInput = { req, steps, derived: derive(req, deps.secretPatterns) };
+    const cmd = req.args["command"];
+    if (req.tool.kind === "shell" && typeof cmd === "string") input.shell = analyzeShell(cmd, { secretPatterns: deps.secretPatterns });
     const permit = evaluate(input, deps.policies.permit);
     errors.push(...permit.errors);
     if (permit.decision === "deny" || permit.errors.length > 0) {
@@ -86,9 +94,10 @@ export function decide(deps: EngineDeps, req: DecisionRequest): Decision {
     }
   }
 
-  const after = deps.state.bump(deps.tenant, req.runId, effect);
+  const after = deps.state.bump(deps.tenant.id, req.runId, effect);
   const latencyMs = Number(process.hrtime.bigint() - t0) / 1e6;
   const receipt: Receipt = {
+    v: RECEIPT_VERSION,
     id: uuidv7(),
     ts: (deps.now ?? (() => new Date()))().toISOString(),
     tenant: deps.tenant,
@@ -128,6 +137,6 @@ export function decide(deps: EngineDeps, req: DecisionRequest): Decision {
     latencyMs: receipt.latencyMs,
     mode: deps.mode,
   };
-  if (req.callId !== undefined) deps.state.rememberCall(deps.tenant, req.runId, req.callId, decision);
+  if (req.callId !== undefined) deps.state.rememberCall(deps.tenant.id, req.runId, req.callId, decision);
   return decision;
 }

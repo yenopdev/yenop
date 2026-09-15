@@ -1,6 +1,9 @@
 import { DatabaseSync } from "node:sqlite";
 import type { Decision, Effect, RunStateStore } from "./types.js";
 
+/** Schema version of the local state database, stored in PRAGMA user_version. */
+export const STATE_VERSION = 1;
+
 /** Run counters in a local SQLite file. One row per (tenant, run). Increments are atomic. */
 export class SqliteRunState implements RunStateStore {
   private db: DatabaseSync;
@@ -11,6 +14,8 @@ export class SqliteRunState implements RunStateStore {
 
   constructor(path: string) {
     this.db = new DatabaseSync(path);
+    const found = (this.db.prepare("PRAGMA user_version").get() as { user_version: number }).user_version;
+    if (found > STATE_VERSION) throw new Error(`yenop: state database is version ${found}; this Yenop understands up to ${STATE_VERSION}. Upgrade Yenop.`);
     this.db.exec(`
       PRAGMA journal_mode = WAL;
       CREATE TABLE IF NOT EXISTS runs (
@@ -31,6 +36,7 @@ export class SqliteRunState implements RunStateStore {
         at TEXT NOT NULL,
         PRIMARY KEY (tenant, run_id, call_id)
       );
+      PRAGMA user_version = ${STATE_VERSION};
     `);
     this.bumpStmt = this.db.prepare(`
       INSERT INTO runs (tenant, run_id, steps, denies, asks, started_at, last_at)

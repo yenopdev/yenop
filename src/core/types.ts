@@ -22,8 +22,14 @@ export interface Principal {
   user: string;
 }
 
+export interface TenantRef {
+  /** Stable identifier, e.g. "tn_01a0a6f042c9720fbfd6279348". Never changes once issued. */
+  id: string;
+  /** Display name; may change. */
+  name: string;
+}
+
 export interface DecisionRequest {
-  tenant: string;
   /** One run is one agent session; budgets are scoped to it. */
   runId: string;
   principal: Principal;
@@ -63,10 +69,14 @@ export interface Decision {
   replayed?: boolean;
 }
 
+export const RECEIPT_VERSION = 1;
+
 export interface Receipt {
+  /** Receipt format version. Parsers must reject versions they do not know. */
+  v: number;
   id: string;
   ts: string;
-  tenant: string;
+  tenant: TenantRef;
   runId: string;
   callId?: string;
   runtime: string;
@@ -114,6 +124,12 @@ export interface PolicyBundle {
   permit: Record<string, string>;
   /** Policies answering "must a person see this first". A permit here means ask. */
   approve: Record<string, string>;
-  /** Where each policy id came from, for receipts and error messages. */
+  /** Where each policy id came from (layer and file), for receipts and error messages. */
   origins: Record<string, string>;
+  /** Validation warnings (not errors) from checking policies against the schema. */
+  warnings: string[];
+  /** Ids that were switched off through config, with the layer they came from. */
+  disabled: Record<string, string>;
+  /** Per-layer counts, for `yenop check` and `yenop status`. */
+  layers: { name: string; dir: string; permit: number; approve: number }[];
 }

@@ -1,11 +1,29 @@
-# Yenop default policy pack
+# Yenop policies
 
-Two folders, two questions.
+## Layers
 
-- `permit/` answers **"may this happen at all?"** Cedar's default is deny, so a tool call needs at least one `permit` here and no `forbid`.
-- `approve/` answers **"must a person see it first?"** A `permit` in this folder means the action is *allowed but needs approval*. A `forbid` here exempts something from approval.
+Yenop evaluates every policy from every layer together. Cedar decides: any `forbid` wins, `permit`s add up.
 
-What a policy can see:
+| Layer | Who writes it | Where | Purpose |
+|---|---|---|---|
+| baseline | Yenop | shipped inside the package, never edited in place | sane defaults, improved with each release |
+| home | you | `~/.yenop/policies/` | this machine, or this tenant when hosted |
+| project | your team | `<project>/.yenop/policies/`, committed with the code | rules for one codebase |
+
+To **tighten**, add a policy file to your layer. To **loosen** a baseline rule, do not edit the shipped file; switch the rule off by id in `~/.yenop/config.json` or `<project>/.yenop/config.json`:
+
+```json
+{ "disabledPolicies": ["no-pipe-to-shell"] }
+```
+
+Every policy carries an `@id("...")`. Ids must be unique across layers; a duplicate with different text is an error that names both files.
+
+## Two folders, two questions
+
+- `permit/` answers **"may this happen at all?"** Cedar's default is deny, so a tool call needs at least one `permit` and no `forbid`.
+- `approve/` answers **"must a person see it first?"** A `permit` in this folder means *allowed but needs approval*. A `forbid` here exempts something from approval.
+
+## What a policy can see
 
 | Name | Meaning |
 |---|---|
@@ -17,5 +35,12 @@ What a policy can see:
 | `context.cwd` | the runtime's working directory |
 | `context.derived.insideProject` | true when the file argument resolves inside `cwd` |
 | `context.derived.absolutePath` | the resolved file argument |
+| `context.derived.secretPath` | true when the file argument matches a secret-file pattern |
+| `context.shell` | present for shell tools: `programs`, `ops`, `paths`, `envRefs`, `sql` (sets), `commandCount`, and the booleans `heredoc`, `sudo`, `pipesToShell`, `secretPath`, `secretEnv`, `network`, `outbound`, `destructive` |
+| `context.call` | the call as an entity; every tool argument is a string tag: `context.call.hasTag("repo") && context.call.getTag("repo") == "acme/prod"` |
 
-Every policy carries an `@id("...")` so receipts can name it. Evaluation errors never silently skip a policy: any error fails closed to deny.
+Test `context has shell` before using shell facts. The full vocabulary is `schema.cedarschema` next to this file; policies that do not match it are rejected at load with a message naming the attribute.
+
+Shell facts come from parsing, not text matching: `sudo`, `env`, `xargs`, `bash -c` and `$(...)` are followed; heredoc bodies and comments are ignored. `ops` holds canonical operations such as `git:push`, `git:--force`, `rm:-r`, `terraform:destroy`, `aws:ec2:terminate-instances`, so a customer rule can say `context.shell.ops.contains("kubectl:delete")`.
+
+Evaluation errors never silently skip a policy: any error fails closed to deny.

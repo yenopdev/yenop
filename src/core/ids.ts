@@ -26,6 +26,12 @@ export function uuidv7(now: number = Date.now()): string {
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
 
+/** Stable tenant identifier: "tn_" + 26 lowercase base32 chars derived from a v7 UUID (time-ordered, globally unique). */
+export function newTenantId(now: number = Date.now()): string {
+  const hex = uuidv7(now).replace(/-/g, "");
+  return "tn_" + BigInt("0x" + hex).toString(32).padStart(26, "0").slice(0, 26);
+}
+
 /** Millisecond timestamp encoded in a v7 id. */
 export function uuidv7Time(id: string): number {
   return parseInt(id.replace(/-/g, "").slice(0, 12), 16);
