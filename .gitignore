@@ -1,0 +1,20 @@
+# secrets and local state
+.env
+.env.*
+*.pem
+*.key
+.yenop/
+# language/tool caches
+node_modules/
+dist/
+build/
+__pycache__/
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+target/
+# editors and OS
+.DS_Store
+.vscode/settings.json
+.idea/
