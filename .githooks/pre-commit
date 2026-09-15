@@ -1,15 +1,16 @@
 #!/bin/sh
-# Yenop isolation guard: refuse commits that would carry the other project's identity.
+# Commits to this repository must carry a Yenop identity and push over the project's SSH alias.
 email="$(git config user.email || true)"
 case "$email" in
-  ""|*dalisplatformu*)
-    echo "yenop: commit refused. Set a Yenop identity for this repo first:" >&2
-    echo "  git config --local user.email <your-yenop-address>" >&2
+  *@yenop.com) ;;
+  *)
+    echo "commit refused: set a Yenop identity for this repository first:" >&2
+    echo "  git config --local user.email <you>@yenop.com" >&2
     exit 1 ;;
 esac
 remote="$(git remote get-url origin 2>/dev/null || true)"
 case "$remote" in
   https://*|git@github.com:*)
-    echo "yenop: origin must use the github-yenop SSH alias, not $remote" >&2
+    echo "origin must use the github-yenop SSH alias, not $remote" >&2
     exit 1 ;;
 esac
