@@ -23,6 +23,10 @@ const CLAUDE_CODE_TOOLS: Record<string, { kind: ToolRef["kind"]; readOnly: boole
   TaskStop: { kind: "read", readOnly: true },
   ListAgents: { kind: "read", readOnly: true },
   SendMessage: { kind: "read", readOnly: true },
+  ScheduleWakeup: { kind: "read", readOnly: true },
+  ReportFindings: { kind: "read", readOnly: true },
+  EnterWorktree: { kind: "read", readOnly: true },
+  ExitWorktree: { kind: "read", readOnly: true },
   WebFetch: { kind: "web", readOnly: true },
   WebSearch: { kind: "web", readOnly: true },
   // Publishes outside the machine.

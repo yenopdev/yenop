@@ -33,6 +33,23 @@ Receipts: `node dist/cli/main.js receipts --last 20`. Raw file: `~/.yenop/receip
 
 Yenop only ever tightens. It never grants something Claude Code would have asked about.
 
+## Two modes
+
+| Mode | What happens |
+|---|---|
+| `enforce` | decisions go back to the runtime: ask and deny take effect |
+| `observe` | decisions are recorded in receipts only; nothing is blocked |
+
+Observe mode is how you roll Yenop out: run it for a week, read the receipts, tune the policies, then switch to enforce. Set it per project in `<project>/.yenop/config.json`, per machine in `~/.yenop/config.json`, or for one command with `YENOP_MODE`. `node dist/cli/main.js status` shows what is active.
+
+## Test it without touching your own work
+
+```sh
+node dist/cli/main.js playground     # creates ~/yenop-playground with fake infra, .env, build output, and enforcement on
+```
+
+Open that folder in Claude Code and ask it to delete the build folder, run terraform destroy, or print the database password. Delete the folder when done.
+
 ## How it decides
 
 ```

@@ -6,6 +6,7 @@ import { trimForReceipt } from "./receipts.js";
 
 export interface EngineDeps {
   tenant: string;
+  mode: "enforce" | "observe";
   policies: PolicyBundle;
   budgets: BudgetLimits;
   state: RunStateStore;
@@ -35,6 +36,10 @@ function derive(req: DecisionRequest): Record<string, string | number | boolean>
  */
 export function decide(deps: EngineDeps, req: DecisionRequest): Decision {
   const t0 = process.hrtime.bigint();
+  if (req.callId !== undefined) {
+    const seen = deps.state.recallCall(deps.tenant, req.runId, req.callId);
+    if (seen) return { ...seen, replayed: true };
+  }
   const before = deps.state.peek(deps.tenant, req.runId);
   const steps = before.steps + 1;
   const reasons: string[] = [];
@@ -94,7 +99,8 @@ export function decide(deps: EngineDeps, req: DecisionRequest): Decision {
     tool: req.tool.name,
     toolKind: req.tool.kind,
     args: trimForReceipt(req.args),
-    enforced: req.permissionMode !== "bypassPermissions",
+    mode: deps.mode,
+    enforced: deps.mode === "enforce" && req.permissionMode !== "bypassPermissions",
     effect,
     reasons,
     errors,
@@ -106,7 +112,7 @@ export function decide(deps: EngineDeps, req: DecisionRequest): Decision {
   if (req.permissionMode !== undefined) receipt.permissionMode = req.permissionMode;
   deps.receipts.append(receipt);
 
-  return {
+  const decision: Decision = {
     effect,
     reasons,
     message,
@@ -120,5 +126,8 @@ export function decide(deps: EngineDeps, req: DecisionRequest): Decision {
     },
     receiptId: receipt.id,
     latencyMs: receipt.latencyMs,
+    mode: deps.mode,
   };
+  if (req.callId !== undefined) deps.state.rememberCall(deps.tenant, req.runId, req.callId, decision);
+  return decision;
 }

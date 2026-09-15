@@ -9,7 +9,7 @@ import type { Decision, DecisionRequest, ReceiptSink, RunStateStore } from "./ty
 
 export * from "./types.js";
 export { classifyTool } from "./tools.js";
-export { loadConfig, DEFAULT_BUDGETS } from "./config.js";
+export { loadConfig, DEFAULT_BUDGETS, type Mode, type YenopConfig } from "./config.js";
 export { loadPolicies, checkPolicies, evaluate, toCedarValue } from "./policy.js";
 export { decide } from "./engine.js";
 export { uuidv7, uuidv7Time } from "./ids.js";
@@ -46,6 +46,7 @@ export function openYenop(opts: OpenOptions = {}): Yenop {
   ensureHome(config.home);
   const deps: EngineDeps = {
     tenant: config.tenant,
+    mode: config.mode,
     policies: loadPolicies(config.policyDirs),
     budgets: config.budgets,
     state: opts.state ?? (opts.dryRun ? new MemoryRunState() : new SqliteRunState(config.statePath)),

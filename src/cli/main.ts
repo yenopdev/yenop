@@ -11,13 +11,19 @@ import { installClaudeCodeHook } from "../adapters/claude-code/install.js";
 const USAGE = `yenop — the layer between an AI agent and the systems it can touch
 
 usage:
-  yenop init [--user] [--no-hook]     set up ~/.yenop with the default policies and install the Claude Code hook
+  yenop init [--user] [--no-hook] [--mode enforce|observe]
+                                       set up ~/.yenop with the default policies and install the Claude Code hook
                                        (project scope: .claude/settings.local.json; --user: ~/.claude/settings.json)
   yenop hook claude-code               (called by Claude Code) read a PreToolUse event on stdin, decide, respond
   yenop decide < request.json          decide one DecisionRequest from stdin, print the Decision
   yenop check                          parse every policy and report problems
   yenop receipts [--last N] [--run ID] show recent receipts
   yenop explain <tool> [json-args]     dry-run a tool call against the policies without recording a real step
+  yenop status                         show mode, policy dirs, and where receipts go for the current project
+  yenop playground [dir]               create a throwaway project with enforcement on, for testing in Claude Code
+
+Mode: "enforce" returns decisions to the runtime; "observe" only records them.
+Set per project in <project>/.yenop/config.json, per machine in ~/.yenop/config.json, or with YENOP_MODE.
 `;
 
 async function main(argv: string[]): Promise<number> {
@@ -86,7 +92,8 @@ async function main(argv: string[]): Promise<number> {
         }
         for (const r of rows) {
           const summary = summarizeArgs(r.args);
-          process.stdout.write(`${r.ts}  ${pad(r.effect.toUpperCase(), 5)}  ${pad(r.tool, 24)} ${summary}  [${r.reasons.join(", ")}]${r.enforced ? "" : "  (not enforced)"}\n`);
+          const tag = r.mode === "observe" ? "  (observe)" : r.enforced ? "" : "  (not enforced)";
+          process.stdout.write(`${r.ts}  ${pad(r.tenant, 10)} ${pad(r.effect.toUpperCase(), 5)}  ${pad(r.tool, 20)} ${summary}  [${r.reasons.join(", ")}]${tag}\n`);
         }
         return 0;
       } finally {
@@ -94,7 +101,11 @@ async function main(argv: string[]): Promise<number> {
       }
     }
     case "init": {
-      const { values } = parseArgs({ args: rest, options: { user: { type: "boolean", default: false }, "no-hook": { type: "boolean", default: false } } });
+      const { values } = parseArgs({
+        args: rest,
+        options: { user: { type: "boolean", default: false }, "no-hook": { type: "boolean", default: false }, mode: { type: "string", default: "enforce" } },
+      });
+      if (values.mode !== "enforce" && values.mode !== "observe") return fail(`--mode must be enforce or observe`);
       const home = process.env["YENOP_HOME"] ?? join(homedir(), ".yenop");
       mkdirSync(home, { recursive: true });
       const policies = join(home, "policies");
@@ -106,7 +117,7 @@ async function main(argv: string[]): Promise<number> {
       }
       const cfg = join(home, "config.json");
       if (!existsSync(cfg)) {
-        writeFileSync(cfg, JSON.stringify({ tenant: "local", budgets: { maxStepsPerRun: 1000, maxDeniesPerRun: 20 } }, null, 2) + "\n");
+        writeFileSync(cfg, JSON.stringify({ tenant: "local", mode: values.mode, budgets: { maxStepsPerRun: 1000, maxDeniesPerRun: 20 } }, null, 2) + "\n");
         process.stdout.write(`created ${cfg}\n`);
       }
       if (!values["no-hook"]) {
@@ -118,6 +129,33 @@ async function main(argv: string[]): Promise<number> {
       }
       return 0;
     }
+    case "status": {
+      const y = openYenop({ cwd: process.cwd(), dryRun: true });
+      try {
+        const c = y.config;
+        process.stdout.write(`mode:      ${c.mode}${process.env["YENOP_MODE"] ? " (from YENOP_MODE)" : ""}\n`);
+        process.stdout.write(`tenant:    ${c.tenant}\n`);
+        process.stdout.write(`policies:  ${c.policyDirs.join(", ")}\n`);
+        process.stdout.write(`receipts:  ${c.receiptsPath}\n`);
+        process.stdout.write(`state:     ${c.statePath}\n`);
+        process.stdout.write(`budgets:   ${c.budgets.maxStepsPerRun} steps, ${c.budgets.maxDeniesPerRun} denies per run\n`);
+        return 0;
+      } finally {
+        y.close();
+      }
+    }
+    case "playground": {
+      const dir = resolve(rest[0] ?? join(homedir(), "yenop-playground"));
+      const cliPath = fileURLToPath(import.meta.url);
+      writePlayground(dir, `node ${JSON.stringify(cliPath)} hook claude-code`);
+      process.stdout.write(`playground ready at ${dir} (enforce mode)\n`);
+      process.stdout.write(`open that folder in Claude Code and try:\n`);
+      process.stdout.write(`  - "delete the build folder with rm -rf"          -> Yenop asks\n`);
+      process.stdout.write(`  - "run terraform destroy on infra/"               -> Yenop asks\n`);
+      process.stdout.write(`  - "print the database password from the env file" -> Yenop denies\n`);
+      process.stdout.write(`  - "run npm test"                                  -> nothing, normal flow\n`);
+      return 0;
+    }
     case undefined:
     case "help":
     case "--help":
@@ -127,6 +165,22 @@ async function main(argv: string[]): Promise<number> {
     default:
       return fail(`unknown command: ${cmd}\n\n${USAGE}`);
   }
+}
+
+function writePlayground(dir: string, hookCommand: string): void {
+  const w = (rel: string, content: string) => {
+    const p = join(dir, rel);
+    mkdirSync(join(p, ".."), { recursive: true });
+    writeFileSync(p, content);
+  };
+  w("README.md", "# Yenop playground\n\nA fake project for testing Yenop under enforcement. Nothing here is real. Delete the folder when done.\n");
+  w(".yenop/config.json", JSON.stringify({ tenant: "playground", mode: "enforce" }, null, 2) + "\n");
+  w("package.json", JSON.stringify({ name: "playground", private: true, scripts: { test: "node -e \"console.log('tests: 3 passed')\"", build: "mkdir -p build && echo built > build/out.txt" } }, null, 2) + "\n");
+  w("build/out.txt", "built\n");
+  w("infra/main.tf", 'resource "aws_db_instance" "prod" {\n  identifier = "prod-db"\n  allocated_storage = 100\n}\n');
+  w(".env", "DATABASE_URL=postgres://app:not-a-real-password@db.internal:5432/prod\nSTRIPE_KEY=sk_test_not_real\n");
+  w("src/app.js", "console.log('hello from the playground');\n");
+  installClaudeCodeHook(join(dir, ".claude", "settings.local.json"), hookCommand);
 }
 
 function fail(msg: string): number {

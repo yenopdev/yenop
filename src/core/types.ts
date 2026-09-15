@@ -57,6 +57,10 @@ export interface Decision {
   budget: BudgetSnapshot;
   receiptId: string;
   latencyMs: number;
+  /** enforce: the runtime is expected to honor this. observe: recorded only. */
+  mode: "enforce" | "observe";
+  /** True when this call id was already decided in this run and the earlier decision was returned. */
+  replayed?: boolean;
 }
 
 export interface Receipt {
@@ -73,7 +77,8 @@ export interface Receipt {
   args: unknown;
   cwd?: string;
   permissionMode?: string;
-  /** False when the runtime told us it will ignore decisions (e.g. bypassPermissions). */
+  mode: "enforce" | "observe";
+  /** False in observe mode, or when the runtime said it ignores decisions (e.g. bypassPermissions). */
   enforced: boolean;
   effect: Effect;
   reasons: string[];
@@ -92,6 +97,10 @@ export interface RunStateStore {
   bump(tenant: string, runId: string, effect: Effect): { steps: number; denies: number; asks: number };
   /** Read counters without changing them. */
   peek(tenant: string, runId: string): { steps: number; denies: number; asks: number };
+  /** Idempotency: the decision already made for this call id in this run, if any. */
+  recallCall(tenant: string, runId: string, callId: string): Decision | undefined;
+  /** Remember a decision so a repeated hook firing for the same call returns it unchanged. */
+  rememberCall(tenant: string, runId: string, callId: string, decision: Decision): void;
   close(): void;
 }
 

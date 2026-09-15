@@ -82,6 +82,8 @@ export async function runHook(raw: string): Promise<HookRunResult> {
   const yenop = openYenop(input.cwd !== undefined ? { cwd: input.cwd } : {});
   try {
     const decision = yenop.decide(toDecisionRequest(input, yenop.config.tenant));
+    // Observe mode: the decision and receipt exist, but the runtime is never told.
+    if (yenop.config.mode === "observe") return { stdout: "", exitCode: 0 };
     return renderHookResult(decision.effect, decision.message);
   } finally {
     yenop.close();

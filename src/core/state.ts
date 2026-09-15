@@ -1,11 +1,13 @@
 import { DatabaseSync } from "node:sqlite";
-import type { Effect, RunStateStore } from "./types.js";
+import type { Decision, Effect, RunStateStore } from "./types.js";
 
 /** Run counters in a local SQLite file. One row per (tenant, run). Increments are atomic. */
 export class SqliteRunState implements RunStateStore {
   private db: DatabaseSync;
   private bumpStmt;
   private peekStmt;
+  private recallStmt;
+  private rememberStmt;
 
   constructor(path: string) {
     this.db = new DatabaseSync(path);
@@ -21,6 +23,14 @@ export class SqliteRunState implements RunStateStore {
         last_at TEXT NOT NULL,
         PRIMARY KEY (tenant, run_id)
       );
+      CREATE TABLE IF NOT EXISTS calls (
+        tenant TEXT NOT NULL,
+        run_id TEXT NOT NULL,
+        call_id TEXT NOT NULL,
+        decision TEXT NOT NULL,
+        at TEXT NOT NULL,
+        PRIMARY KEY (tenant, run_id, call_id)
+      );
     `);
     this.bumpStmt = this.db.prepare(`
       INSERT INTO runs (tenant, run_id, steps, denies, asks, started_at, last_at)
@@ -33,6 +43,17 @@ export class SqliteRunState implements RunStateStore {
       RETURNING steps, denies, asks
     `);
     this.peekStmt = this.db.prepare(`SELECT steps, denies, asks FROM runs WHERE tenant = ? AND run_id = ?`);
+    this.recallStmt = this.db.prepare(`SELECT decision FROM calls WHERE tenant = ? AND run_id = ? AND call_id = ?`);
+    this.rememberStmt = this.db.prepare(`INSERT OR IGNORE INTO calls (tenant, run_id, call_id, decision, at) VALUES (?, ?, ?, ?, ?)`);
+  }
+
+  recallCall(tenant: string, runId: string, callId: string): Decision | undefined {
+    const row = this.recallStmt.get(tenant, runId, callId) as { decision: string } | undefined;
+    return row ? (JSON.parse(row.decision) as Decision) : undefined;
+  }
+
+  rememberCall(tenant: string, runId: string, callId: string, decision: Decision): void {
+    this.rememberStmt.run(tenant, runId, callId, JSON.stringify(decision), new Date().toISOString());
   }
 
   bump(tenant: string, runId: string, effect: Effect): { steps: number; denies: number; asks: number } {
@@ -68,6 +89,13 @@ export class MemoryRunState implements RunStateStore {
   }
   peek(tenant: string, runId: string): { steps: number; denies: number; asks: number } {
     return { ...(this.runs.get(`${tenant}\u0000${runId}`) ?? { steps: 0, denies: 0, asks: 0 }) };
+  }
+  private calls = new Map<string, Decision>();
+  recallCall(tenant: string, runId: string, callId: string): Decision | undefined {
+    return this.calls.get(`${tenant}\u0000${runId}\u0000${callId}`);
+  }
+  rememberCall(tenant: string, runId: string, callId: string, decision: Decision): void {
+    this.calls.set(`${tenant}\u0000${runId}\u0000${callId}`, decision);
   }
   close(): void {}
 }

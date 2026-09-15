@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { mkdtempSync, rmSync, readFileSync } from "node:fs";
+import { mkdtempSync, rmSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openYenop, classifyTool, type Yenop, type DecisionRequest } from "./index.js";
@@ -107,17 +107,53 @@ describe("circuit breakers", () => {
   });
 });
 
+describe("idempotency", () => {
+  it("returns the same decision for a repeated call id without counting it twice", () => {
+    const r = { ...req("Bash", { command: "terraform destroy" }, "dup"), callId: "toolu_same" };
+    const a = y.decide(r);
+    const b = y.decide(r);
+    expect(a.effect).toBe("ask");
+    expect(b).toMatchObject({ effect: "ask", receiptId: a.receiptId, replayed: true });
+    expect(y.decide(req("Read", { file_path: "/tmp/demo-project/a" }, "dup")).budget.steps).toBe(2);
+  });
+  it("treats desktop-app orchestration tools as internal", () => {
+    expect(y.decide(req("ScheduleWakeup", { stop: true })).effect).toBe("allow");
+  });
+});
+
 describe("receipts", () => {
   it("writes one line per decision with the policy that decided it", () => {
     const lines = readFileSync(join(home, "receipts.jsonl"), "utf8").trim().split("\n");
-    const last = JSON.parse(lines[lines.length - 1]!) as { effect: string; reasons: string[]; tool: string };
-    expect(lines.length).toBeGreaterThan(10);
-    expect(last).toMatchObject({ effect: "deny", tool: "Bash" });
+    const rows = lines.map((l) => JSON.parse(l) as { effect: string; reasons: string[]; tool: string; id: string });
+    expect(rows.length).toBeGreaterThan(10);
+    expect(rows.some((r) => r.effect === "deny" && r.tool === "Bash" && r.reasons.includes("no-secret-files-in-shell"))).toBe(true);
+    expect(rows.some((r) => r.effect === "ask" && r.reasons.includes("approve:destructive-shell"))).toBe(true);
+    expect(new Set(rows.map((r) => r.id)).size).toBe(rows.length);
   });
   it("fails closed when a policy errors instead of skipping it", () => {
     // command is not a string here, so `like` errors inside the forbid policy
     const d = y.decide(req("Bash", { command: 42 }));
     expect(d.effect).toBe("deny");
     expect(d.errors.length).toBeGreaterThan(0);
+  });
+});
+
+describe("observe mode", () => {
+  it("records the same decision but marks it unenforced", () => {
+    const h = mkdtempSync(join(tmpdir(), "yenop-observe-"));
+    const proj = join(h, "proj");
+    mkdirSync(join(proj, ".yenop"), { recursive: true });
+    writeFileSync(join(proj, ".yenop", "config.json"), JSON.stringify({ mode: "observe" }));
+    const o = openYenop({ home: h, cwd: proj });
+    try {
+      const d = o.decide({ ...req("Bash", { command: "terraform destroy" }), cwd: proj });
+      expect(d.effect).toBe("ask");
+      expect(d.mode).toBe("observe");
+      const last = readFileSync(join(h, "receipts.jsonl"), "utf8").trim().split("\n").pop()!;
+      expect(JSON.parse(last)).toMatchObject({ effect: "ask", mode: "observe", enforced: false });
+    } finally {
+      o.close();
+      rmSync(h, { recursive: true, force: true });
+    }
   });
 });

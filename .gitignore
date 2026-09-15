@@ -3,7 +3,9 @@
 .env.*
 *.pem
 *.key
-.yenop/
+# yenop: config and policies are tracked; state and receipts are not
+.yenop/state.db*
+.yenop/receipts.jsonl
 # language/tool caches
 node_modules/
 dist/

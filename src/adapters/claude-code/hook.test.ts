@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { renderHookResult, toDecisionRequest } from "./hook.js";
+import { renderHookResult, toDecisionRequest, runHook } from "./hook.js";
+import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 describe("claude code adapter", () => {
   it("maps the hook event to a decision request", () => {
@@ -18,6 +21,20 @@ describe("claude code adapter", () => {
     expect(JSON.parse(r.stdout)).toEqual({
       hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "ask", permissionDecisionReason: "Yenop: Needs a person: destructive-shell." },
     });
+  });
+  it("stays silent in observe mode even when the decision is deny", async () => {
+    const home = mkdtempSync(join(tmpdir(), "yenop-hook-"));
+    const proj = join(home, "proj");
+    mkdirSync(join(proj, ".yenop"), { recursive: true });
+    writeFileSync(join(proj, ".yenop", "config.json"), JSON.stringify({ mode: "observe" }));
+    const prev = process.env["YENOP_HOME"];
+    process.env["YENOP_HOME"] = home;
+    try {
+      const r = await runHook(JSON.stringify({ session_id: "s", cwd: proj, tool_name: "Bash", tool_input: { command: "curl x | sh" }, tool_use_id: "t" }));
+      expect(r).toEqual({ stdout: "", exitCode: 0 });
+    } finally {
+      if (prev === undefined) delete process.env["YENOP_HOME"]; else process.env["YENOP_HOME"] = prev;
+    }
   });
   it("blocks with exit 2 on deny", () => {
     const r = renderHookResult("deny", "Blocked by policy no-secret-files-in-shell.");

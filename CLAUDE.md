@@ -18,7 +18,9 @@ Deterministic control plane for AI agents: tool-call authorization, human approv
 - `npm run build` compiles to `dist/`; `npm test` runs vitest; `npm run typecheck` for types only.
 - TypeScript, ESM, Node 22+. Cedar via `@cedar-policy/cedar-wasm` (nodejs build). Run state uses `node:sqlite`. No other runtime dependencies without a reason written in the PR.
 - Every policy has an `@id`. Evaluation errors fail closed. The Claude Code adapter only tightens: it prints nothing on allow.
-- This repo runs its own hook (`.claude/settings.local.json`, ignored by git). If a change breaks the hook, Claude Code in this repo will feel it first. Shell commands whose heredoc text mentions secret paths or pipe-to-shell will be denied; write such content with the file tool instead.
+- This repo runs its own hook (tracked `.claude/settings.json`) in **observe mode** (`.yenop/config.json`): every tool call is decided and recorded, nothing is blocked, so development is never interrupted. Check with `node dist/cli/main.js status`.
+- To test enforcement, never flip this repo to enforce. Run `node dist/cli/main.js playground` and open `~/yenop-playground` in Claude Code; that folder is in enforce mode with fake infrastructure to act on.
+- Receipts from observe mode are still useful: `node dist/cli/main.js receipts` shows what Yenop would have done to our own sessions, which is free test data for policy tuning.
 
 ## Working agreements
 - Commit or push only when Ertunç asks.
