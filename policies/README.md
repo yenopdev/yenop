@@ -37,6 +37,7 @@ Every policy carries an `@id("...")`. Ids must be unique across layers; a duplic
 | `context.derived.insideProject` | true when the file argument resolves inside `cwd` |
 | `context.derived.absolutePath` | the resolved file argument |
 | `context.derived.secretPath` | true when the file argument matches a secret-file pattern |
+| `context.derived.controlPlanePath` | true when the file argument is one of Yenop's own files or a Claude Code settings file |
 | `context.shell` | present for shell tools: `programs`, `ops`, `paths`, `envRefs`, `sql` (sets), `commandCount`, and the booleans `heredoc`, `sudo`, `pipesToShell`, `secretPath`, `secretEnv`, `network`, `outbound`, `destructive` |
 | `context.call` | the call as an entity; every tool argument is a string tag: `context.call.hasTag("repo") && context.call.getTag("repo") == "acme/prod"` |
 

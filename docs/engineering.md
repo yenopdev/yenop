@@ -12,6 +12,16 @@
 - Policies are layered: baseline (shipped, in `policies/`), home (`~/.yenop/policies`), project (`<repo>/.yenop/policies`), plus `disabledPolicies` in config. Init never copies the baseline; users never edit shipped files.
 - Every policy has an `@id`. Evaluation errors fail closed. The Claude Code adapter only tightens: it prints nothing on allow.
 
+## Failing closed
+- Three places can fail: evaluating a policy, loading policies, and Yenop itself. All three end in deny when the mode is enforce. `openYenop` never throws on bad policies; it returns an instance with `policyError` whose every decision is `breaker:policies-invalid`. The hook command turns any unexpected exception into a deny with exit 2, because Claude Code reads every other exit code as "no opinion".
+- The CLI must stay usable in the broken state. Never make `check`, `status`, `receipts` or `schema` depend on policies loading.
+- Found in manual testing on 2026-09-18: an agent wrote a well-meant but invalid policy, and the hook's exit 1 let a destructive command through. Keep the regression tests in `sequence.test.ts` and `server.test.ts`.
+
+## Self-protection
+- `isControlPlanePath` in `src/core/shell.ts` defines Yenop's own files: any `.yenop/` folder and `.claude/settings(.local).json`. The baseline policy `changes-to-yenop-itself` asks a person before any tool writes them, before a shell command that is not plain viewing touches them, and before `yenop daemon stop|run` or `yenop init`.
+- When a new adapter registers Yenop somewhere else (another runtime's config file), add that path here in the same change.
+- Never add a baseline rule that lets an agent loosen the guard without a person.
+
 ## Sequence rules
 - Run facts (`untrusted`, `sensitive`, `outbound`, `destructive`) live in the state store and are sticky for the run. Only calls that were not denied leave a mark.
 - `flowOf` in `src/core/engine.ts` is the single place that maps a tool call to flow facts. A new adapter or tool kind extends it there, never in policies.

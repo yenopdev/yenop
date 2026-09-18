@@ -49,6 +49,8 @@ export interface ShellFacts {
   outbound: boolean;
   /** Deletes, force-pushes, destroys, drops, prunes, wipes. */
   destructive: boolean;
+  /** Changes Yenop's own rules, mode, daemon, or hook registration. A guard the guarded party can reconfigure is no guard. */
+  controlPlane: boolean;
 }
 
 /** Default secret-file patterns. `**` spans directories, `*` does not. A leading `!` excludes. */
@@ -83,6 +85,12 @@ const DESTRUCTIVE_SUBCOMMAND = /(^|[-_])(delete|destroy|terminate|remove|rm|rmi|
 const SQL_VERBS = ["DROP TABLE", "DROP DATABASE", "DROP SCHEMA", "DROP INDEX", "DELETE FROM", "TRUNCATE", "ALTER TABLE"];
 const SECRET_ENV = /(KEY|TOKEN|SECRET|PASS|PASSWORD|PASSWD|CRED|CREDENTIAL|PRIVATE|AUTH)/i;
 const DB_CLIENTS = new Set(["psql", "pg_dump", "pg_dumpall", "mysql", "mysqldump", "mongosh", "mongo", "mongodump", "redis-cli", "sqlite3", "sqlcmd", "clickhouse-client", "bq", "snowsql"]);
+
+/** Paths that hold Yenop's own configuration, or the hook registration that puts Yenop in the loop. */
+export function isControlPlanePath(p: string): boolean {
+  return /(^|\/)\.yenop(\/|$)/.test(p) || /(^|\/)\.claude\/settings(\.local)?\.json$/.test(p);
+}
+const VIEWERS = new Set(["cat", "less", "more", "head", "tail", "grep", "rg", "ls", "wc", "stat", "file", "diff", "bat", "jq", "find", "tree", "du", "cd", "test", "["]);
 
 /** Loopback, link-local, private ranges, and names that never leave the machine or the LAN. */
 export function isInternalHost(host: string): boolean {
@@ -412,6 +420,7 @@ export function analyzeShell(command: string, opts: { secretPatterns?: string[];
   let destructive = false;
   let download = false;
   let sensitiveRead = false;
+  let controlPlane = false;
   let hostUnknown = false;
 
   // env refs and SQL from every argument, including quoted strings
@@ -434,6 +443,11 @@ export function analyzeShell(command: string, opts: { secretPatterns?: string[];
     const prog = base(argv[0]!);
     const args = argv.slice(1);
     programs.add(prog);
+
+    // Yenop's own files: writing them (or anything that is not plain viewing), stopping the daemon, re-running init.
+    for (const r of cmd.redirects) if (r.op !== "<" && r.op !== "<<<" && isControlPlanePath(expandHome(r.target, home))) controlPlane = true;
+    if (!VIEWERS.has(prog) && args.some((a) => !a.startsWith("-") && isControlPlanePath(expandHome(a, home)))) controlPlane = true;
+    if (prog === "yenop" && ((args[0] === "daemon" && (args[1] === "stop" || args[1] === "run")) || args[0] === "init")) controlPlane = true;
 
     for (const r of cmd.redirects) {
       if (r.op !== "<<<" && isPathLike(r.target)) paths.add(expandHome(r.target, home));
@@ -646,5 +660,6 @@ export function analyzeShell(command: string, opts: { secretPatterns?: string[];
     sensitiveRead,
     outbound,
     destructive,
+    controlPlane,
   };
 }

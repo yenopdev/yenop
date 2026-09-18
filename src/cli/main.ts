@@ -19,7 +19,9 @@ usage:
   yenop hook claude-code               (called by Claude Code) read a PreToolUse event on stdin, decide, respond
   yenop decide < request.json          decide one DecisionRequest from stdin, print the Decision
   yenop check                          parse and validate every policy in every layer
-  yenop receipts [--last N] [--run ID] show recent receipts
+  yenop schema                         print the policy vocabulary and an example
+  yenop receipts [--last N] [--run ID] [--all]
+                                       recent receipts for this project's tenant; --all for every project
   yenop explain <tool> [json-args]     dry-run a tool call against the policies without recording a real step
   yenop status                         show mode, layers, daemon, and where receipts go for the current project
   yenop playground [dir]               create a throwaway project with enforcement on, for testing in Claude Code
@@ -38,9 +40,17 @@ async function main(argv: string[]): Promise<number> {
     case "hook": {
       if (rest[0] !== "claude-code") return fail(`unknown hook runtime: ${rest[0] ?? "(none)"}`);
       const { runHook, readStdin } = await import("../adapters/claude-code/hook.js");
-      const r = await runHook(await readStdin());
-      if (r.stdout) process.stdout.write(r.stdout + "\n");
-      return r.exitCode;
+      try {
+        const r = await runHook(await readStdin());
+        if (r.stdout) process.stdout.write(r.stdout + "\n");
+        return r.exitCode;
+      } catch (e) {
+        // Claude Code treats any other exit code as "no opinion". A guard that broke must say no, loudly.
+        if (process.env["YENOP_MODE"] === "observe") return 0;
+        const reason = `Yenop failed and refuses by default: ${(e as Error).message.split("\n")[0]}. Run "yenop status".`;
+        process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: reason } }) + "\n");
+        return 2;
+      }
     }
     case "daemon":
       return daemonCommand(rest[0]);
@@ -76,6 +86,10 @@ async function main(argv: string[]): Promise<number> {
       const { openYenop, loadPolicies, checkPolicies } = await import("../core/index.js");
       const y = openYenop({ cwd: process.cwd(), dryRun: true });
       try {
+        if (y.policyError !== undefined) {
+          process.stdout.write(`INVALID: ${y.policyError}\n\nUntil this is fixed, Yenop refuses every action in this project${y.config.mode === "observe" ? " (observe mode: recorded, not enforced)" : ""}.\nThe vocabulary: yenop schema\n`);
+          return 1;
+        }
         const bundle = loadPolicies(y.config.policyLayers, { disabled: y.config.disabledPolicies });
         checkPolicies(bundle);
         for (const l of bundle.layers) process.stdout.write(`${pad(l.name, 9)} ${l.permit} permit, ${l.approve} approval   ${l.dir}\n`);
@@ -89,15 +103,18 @@ async function main(argv: string[]): Promise<number> {
       }
     }
     case "receipts": {
-      const { values } = parseArgs({ args: rest, options: { last: { type: "string", default: "20" }, run: { type: "string" } } });
+      const { values } = parseArgs({ args: rest, options: { last: { type: "string", default: "20" }, run: { type: "string" }, all: { type: "boolean", default: false } } });
       const { openYenop, readReceipts } = await import("../core/index.js");
       const y = openYenop({ cwd: process.cwd(), dryRun: true });
       try {
         let rows = readReceipts(y.config.receiptsPath, 10_000);
+        // One receipts file serves every project on the machine; show this project's tenant unless asked for all.
+        const mine = y.config.tenant;
+        if (!values.all) rows = rows.filter((r) => (typeof r.tenant === "string" ? r.tenant === mine.name : r.tenant.id === mine.id));
         if (values.run) rows = rows.filter((r) => r.runId === values.run);
         rows = rows.slice(-Number(values.last));
         if (rows.length === 0) {
-          process.stdout.write(`no receipts yet (${y.config.receiptsPath})\n`);
+          process.stdout.write(`no receipts for tenant "${mine.name}" yet (${y.config.receiptsPath}); use --all to see every project\n`);
           return 0;
         }
         for (const r of rows) {
@@ -118,6 +135,7 @@ async function main(argv: string[]): Promise<number> {
       try {
         const c = y.config;
         process.stdout.write(`mode:      ${c.mode}${process.env["YENOP_MODE"] ? " (from YENOP_MODE)" : ""}\n`);
+        if (y.policyError !== undefined) process.stdout.write(`POLICIES:  INVALID, every action is refused until fixed. Run: yenop check\n`);
         process.stdout.write(`tenant:    ${c.tenant.name} (${c.tenant.id})\n`);
         for (const l of c.policyLayers) process.stdout.write(`${pad(l.name === "baseline" ? "policies:" : "", 10)} ${pad(l.name, 9)} ${l.dir}\n`);
         if (c.disabledPolicies.length) process.stdout.write(`disabled:  ${c.disabledPolicies.join(", ")}\n`);
@@ -132,6 +150,12 @@ async function main(argv: string[]): Promise<number> {
       } finally {
         y.close();
       }
+    }
+    case "schema": {
+      const { builtinPoliciesDir, loadSchema } = await import("../core/index.js");
+      process.stdout.write(loadSchema(builtinPoliciesDir()));
+      process.stdout.write(`\n// Example, in <project>/.yenop/policies/approve/team.cedar (a permit in approve/ means "ask a person"):\n//\n// @id("ask-before-npm-install")\n// permit (principal, action == Yenop::Action::"call", resource)\n// when { context has shell && (context.shell.ops.contains("npm:install") || context.shell.ops.contains("npm:i") || context.shell.ops.contains("npm:add") || context.shell.ops.contains("npm:ci")) };\n//\n// Check your work: yenop check     Try it: yenop explain Bash '{"command":"npm install x"}'\n`);
+      return 0;
     }
     case "init":
       return init(rest);
@@ -339,6 +363,7 @@ function writePlayground(dir: string, hookCommand: string, configVersion: number
   w("infra/main.tf", 'resource "aws_db_instance" "prod" {\n  identifier = "prod-db"\n  allocated_storage = 100\n}\n');
   w(".env", "DATABASE_URL=postgres://app:not-a-real-password@db.internal:5432/prod\nSTRIPE_KEY=sk_test_not_real\n");
   w("src/app.js", "console.log('hello from the playground');\n");
+  w(".yenop/policies/README.md", "# Policies for this project\n\nRun `yenop schema` for the vocabulary and an example, `yenop check` to validate, `yenop explain` to try a call.\nA permit in `approve/` means ask a person. A forbid in `permit/` means never.\nAn invalid policy file makes Yenop refuse every action in this project until it is fixed.\n");
   // written lazily to avoid loading the installer for other commands
   import("../adapters/claude-code/install.js").then(({ installClaudeCodeHook }) => installClaudeCodeHook(join(dir, ".claude", "settings.local.json"), hookCommand));
 }

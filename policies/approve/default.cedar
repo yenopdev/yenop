@@ -16,6 +16,15 @@ when { context has shell && context.shell.outbound };
 permit (principal, action == Yenop::Action::"call", resource)
 when { context has shell && context.shell.sudo };
 
+// Yenop protects itself. An agent may not loosen its own guard: changing Yenop's config, policies,
+// mode or daemon, or the hook registration that keeps Yenop in the loop, always goes past a person.
+@id("changes-to-yenop-itself")
+permit (principal, action == Yenop::Action::"call", resource)
+when {
+  (context has shell && context.shell.controlPlane) ||
+  (resource.kind == "write" && context.derived has controlPlanePath && context.derived.controlPlanePath)
+};
+
 // Sequence rules. A plan split into harmless-looking steps still adds up: these look at what the
 // run has already done, not only at this call. Calls to localhost and private ranges do not count.
 

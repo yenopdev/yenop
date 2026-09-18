@@ -41,6 +41,7 @@ namespace Yenop {
     sensitiveRead: Bool,
     outbound: Bool,
     destructive: Bool,
+    controlPlane: Bool,
   };
 
   // What the run has done before this call. Flags are sticky for the rest of the run.
@@ -69,6 +70,7 @@ namespace Yenop {
     insideProject?: Bool,
     absolutePath?: String,
     secretPath?: Bool,
+    controlPlanePath?: Bool,
   };
 
   action call appliesTo {

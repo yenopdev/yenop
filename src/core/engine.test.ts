@@ -161,9 +161,15 @@ describe("receipts", () => {
     mkdirSync(join(h, "policies", "permit"), { recursive: true });
     writeFileSync(join(h, "policies", "permit", "typo.cedar"), `@id("typo") forbid (principal, action, resource) when { context.args has commnd && context.args.commnd like "*x*" };`);
     // behind a `has` guard the typo makes the policy impossible; without it Cedar suggests the right name
-    expect(() => openYenop({ home: h, cwd })).toThrow(/vocabulary[\s\S]*typo[\s\S]*(impossible|did you mean)/);
+    const open = () => {
+      const o = openYenop({ home: h, cwd });
+      const err = o.policyError;
+      o.close();
+      return err ?? "";
+    };
+    expect(open()).toMatch(/vocabulary[\s\S]*typo[\s\S]*(impossible|did you mean)/);
     writeFileSync(join(h, "policies", "permit", "typo.cedar"), `@id("typo") forbid (principal, action, resource) when { context.args.commnd like "*x*" };`);
-    expect(() => openYenop({ home: h, cwd })).toThrow(/commnd[\s\S]*did you mean `command`/);
+    expect(open()).toMatch(/commnd[\s\S]*did you mean `command`/);
     rmSync(h, { recursive: true, force: true });
   });
   it("lets policies reach untyped tool arguments through call tags", () => {
@@ -242,7 +248,10 @@ describe("policy layers", () => {
     const ok = openYenop({ home: h, cwd });
     ok.close();
     writeFileSync(join(h, "policies", "permit", "copy.cedar"), `@id("shell") permit (principal, action, resource);`);
-    expect(() => openYenop({ home: h, cwd })).toThrow(/defined in baseline:.*again, differently, in home:/);
+    const conflicted = openYenop({ home: h, cwd });
+    expect(conflicted.policyError).toMatch(/defined in baseline:.*again, differently, in home:/);
+    expect(conflicted.decide(req("Bash", { command: "npm test" }, "conflict")).effect).toBe("deny");
+    conflicted.close();
     rmSync(h, { recursive: true, force: true });
   });
 });

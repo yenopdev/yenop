@@ -4,12 +4,14 @@ import type { BudgetLimits, Decision, DecisionRequest, Effect, FlowFacts, Policy
 import type { ShellFacts } from "./shell.js";
 import { evaluate, type EvalInput } from "./policy.js";
 import { trimForReceipt } from "./receipts.js";
-import { analyzeShell, isInternalHost, matchesSecretPattern } from "./shell.js";
+import { analyzeShell, isControlPlanePath, isInternalHost, matchesSecretPattern } from "./shell.js";
 import { RECEIPT_VERSION } from "./types.js";
 
 export interface EngineDeps {
   tenant: import("./types.js").TenantRef;
   mode: "enforce" | "observe";
+  /** Policies failed to load. Every decision is a deny until a person fixes them. */
+  policyError?: string;
   secretPatterns: string[];
   sensitivePatterns?: string[];
   trustedServers?: string[];
@@ -33,6 +35,7 @@ function derive(req: DecisionRequest, secretPatterns: string[]): Record<string, 
     }
     out["absolutePath"] = abs;
     out["secretPath"] = matchesSecretPattern(abs, secretPatterns);
+    out["controlPlanePath"] = isControlPlanePath(abs);
   }
   return out;
 }
@@ -122,7 +125,12 @@ export function decide(deps: EngineDeps, req: DecisionRequest): Decision {
   const shell = req.tool.kind === "shell" && typeof cmd === "string" ? analyzeShell(cmd, { secretPatterns: deps.secretPatterns }) : undefined;
   const flow = flowOf(deps, req, derived, shell);
 
-  if (steps > deps.budgets.maxStepsPerRun) {
+  if (deps.policyError !== undefined) {
+    effect = "deny";
+    reasons.push("breaker:policies-invalid");
+    errors.push(deps.policyError);
+    message = `Yenop cannot load its policies, so every action is refused until a person fixes them. Run "yenop check". ${deps.policyError.split("\n").slice(0, 2).join(" ")}`;
+  } else if (steps > deps.budgets.maxStepsPerRun) {
     effect = "deny";
     reasons.push("breaker:max-steps");
     message = `Run exceeded ${deps.budgets.maxStepsPerRun} tool calls; Yenop stopped it.`;

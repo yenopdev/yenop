@@ -5,7 +5,7 @@ import { loadPolicies } from "./policy.js";
 import { SqliteRunState, MemoryRunState } from "./state.js";
 import { JsonlReceipts, NullReceipts } from "./receipts.js";
 import { decide, type EngineDeps } from "./engine.js";
-import type { Decision, DecisionRequest, ReceiptSink, RunStateStore } from "./types.js";
+import type { Decision, DecisionRequest, PolicyBundle, ReceiptSink, RunStateStore } from "./types.js";
 
 export * from "./types.js";
 export { classifyTool } from "./tools.js";
@@ -14,7 +14,7 @@ export { loadPolicies, checkPolicies, evaluate, toCedarValue } from "./policy.js
 export { RECEIPT_VERSION } from "./types.js";
 export { decide } from "./engine.js";
 export { uuidv7, uuidv7Time, newTenantId } from "./ids.js";
-export { analyzeShell, matchesSecretPattern, isInternalHost, DEFAULT_SECRET_PATTERNS, type ShellFacts } from "./shell.js";
+export { analyzeShell, matchesSecretPattern, isInternalHost, isControlPlanePath, DEFAULT_SECRET_PATTERNS, type ShellFacts } from "./shell.js";
 export { loadSchema, validateAgainstSchema } from "./policy.js";
 export { CONFIG_VERSION, resolveTenant, localTenantId } from "./config.js";
 export { STATE_VERSION } from "./state.js";
@@ -29,6 +29,8 @@ export function builtinPoliciesDir(): string {
 
 export interface Yenop {
   config: YenopConfig;
+  /** Set when the policies could not be loaded or do not match the vocabulary. Every decision is then a deny. */
+  policyError?: string;
   decide(req: DecisionRequest): Decision;
   close(): void;
 }
@@ -49,10 +51,20 @@ export function openYenop(opts: OpenOptions = {}): Yenop {
   if (opts.home !== undefined) cfgOpts.home = opts.home;
   const config = loadConfig(cfgOpts);
   ensureHome(config.home);
+  // A guard that cannot read its rules must not wave everything through. Load errors become a standing deny,
+  // and the instance still opens so `yenop check`, `status` and `receipts` can show a person what is wrong.
+  let policies: PolicyBundle = { permit: {}, approve: {}, origins: {}, disabled: {}, layers: [], warnings: [] };
+  let policyError: string | undefined;
+  try {
+    policies = loadPolicies(config.policyLayers, { disabled: config.disabledPolicies });
+  } catch (e) {
+    policyError = (e as Error).message.replace(/^yenop: /, "");
+  }
   const deps: EngineDeps = {
     tenant: config.tenant,
     mode: config.mode,
-    policies: loadPolicies(config.policyLayers, { disabled: config.disabledPolicies }),
+    policies,
+    ...(policyError !== undefined ? { policyError } : {}),
     secretPatterns: config.secretPatterns,
     sensitivePatterns: config.sensitivePatterns,
     trustedServers: config.trustedServers,
@@ -63,6 +75,7 @@ export function openYenop(opts: OpenOptions = {}): Yenop {
   };
   return {
     config,
+    ...(policyError !== undefined ? { policyError } : {}),
     decide: (req) => decide(deps, req),
     close: () => {
       deps.state.close();

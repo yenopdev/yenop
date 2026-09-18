@@ -84,6 +84,19 @@ describe("daemon", () => {
     const bad = await rawPost({ ...info, token: "x" }, "/hooks/claude-code", "{}");
     expect(bad.status).toBe(401);
   });
+  it("denies everything in a project whose policies are invalid, then recovers once fixed", async () => {
+    const p2 = join(home, "proj2");
+    mkdirSync(join(p2, ".yenop", "policies", "approve"), { recursive: true });
+    const f = join(p2, ".yenop", "policies", "approve", "bad.cedar");
+    writeFileSync(f, `@id("bad") permit (principal, action == Action::"Bash", resource);`);
+    const call = () => daemonRequest<Record<string, { permissionDecision?: string; permissionDecisionReason?: string }>>(info, "/hooks/claude-code", { session_id: "p2", cwd: p2, tool_name: "Bash", tool_input: { command: "npm test" }, tool_use_id: `p${Math.random()}` });
+    const denied = await call();
+    expect(denied["hookSpecificOutput"]?.permissionDecision).toBe("deny");
+    expect(denied["hookSpecificOutput"]?.permissionDecisionReason).toMatch(/cannot load its policies/);
+    writeFileSync(f, `@id("bad") permit (principal, action == Yenop::Action::"call", resource) when { context has shell && context.shell.sudo };`);
+    await new Promise((r) => setTimeout(r, 1100));
+    expect(await call()).toEqual({});
+  });
   it("never blocks on a malformed hook body", async () => {
     const r = await daemonRequest<Record<string, unknown>>(info, "/hooks/claude-code", { nonsense: true });
     expect(r).toEqual({});

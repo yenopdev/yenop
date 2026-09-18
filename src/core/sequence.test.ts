@@ -146,3 +146,61 @@ describe("state database upgrade", () => {
     rmSync(dir, { recursive: true, force: true });
   });
 });
+
+describe("Yenop protects itself", () => {
+  const a = (c: string) => analyzeShell(c, { home: "/home/u" });
+  it("sees attempts to loosen the guard from the shell", () => {
+    expect(a(`echo '{"disabledPolicies":["no-secret-files"]}' > .yenop/config.json`).controlPlane).toBe(true);
+    expect(a("sed -i '' 's/enforce/observe/' .yenop/config.json").controlPlane).toBe(true);
+    expect(a("rm -rf ~/.yenop/policies").controlPlane).toBe(true);
+    expect(a("python3 edit.py .claude/settings.json").controlPlane).toBe(true);
+    expect(a("yenop daemon stop").controlPlane).toBe(true);
+    expect(a("yenop init --mode observe").controlPlane).toBe(true);
+  });
+  it("does not mind looking", () => {
+    expect(a("cat .yenop/config.json").controlPlane).toBe(false);
+    expect(a("ls ~/.yenop/policies/permit").controlPlane).toBe(false);
+    expect(a("yenop status").controlPlane).toBe(false);
+    expect(a("yenop receipts --last 5").controlPlane).toBe(false);
+    expect(a("npm test").controlPlane).toBe(false);
+  });
+  it("asks a person before any tool edits Yenop's rules or the hook registration", () => {
+    const e1 = y.decide(req("self", "Edit", { file_path: `${cwd}/.yenop/config.json`, old_string: "enforce", new_string: "observe" }));
+    expect(e1.effect).toBe("ask");
+    expect(e1.reasons).toContain("approve:changes-to-yenop-itself");
+    expect(y.decide(req("self", "Write", { file_path: `${cwd}/.claude/settings.local.json`, content: "{}" })).reasons).toContain("approve:changes-to-yenop-itself");
+    expect(y.decide(req("self", "Bash", { command: "yenop daemon stop" })).reasons).toContain("approve:changes-to-yenop-itself");
+    expect(y.decide(req("self", "Edit", { file_path: `${cwd}/src/app.ts`, old_string: "a", new_string: "b" })).effect).toBe("allow");
+  });
+});
+
+describe("a guard that cannot read its rules says no", () => {
+  it("refuses everything while a policy file is invalid, and recovers when it is fixed", () => {
+    const h = mkdtempSync(join(tmpdir(), "yenop-broken-"));
+    const proj = join(h, "proj");
+    mkdirSync(join(proj, ".yenop", "policies", "approve"), { recursive: true });
+    const file = join(proj, ".yenop", "policies", "approve", "team.cedar");
+    writeFileSync(file, `@id("guess") permit (principal, action == Action::"Bash", resource) when { context.command like "*npm install*" };`);
+    const broken = openYenop({ home: h, cwd: proj });
+    try {
+      expect(broken.policyError).toMatch(/vocabulary[\s\S]*did you mean/);
+      const d = broken.decide({ ...req("b", "Bash", { command: "npm test" }), cwd: proj });
+      expect(d.effect).toBe("deny");
+      expect(d.reasons).toEqual(["breaker:policies-invalid"]);
+      expect(d.message).toMatch(/yenop check/);
+      expect(broken.decide({ ...req("b", "Read", { file_path: join(proj, "a.txt") }), cwd: proj }).effect).toBe("deny");
+    } finally {
+      broken.close();
+    }
+    writeFileSync(file, `@id("ask-npm") permit (principal, action == Yenop::Action::"call", resource) when { context has shell && context.shell.ops.contains("npm:install") };`);
+    const fixed = openYenop({ home: h, cwd: proj });
+    try {
+      expect(fixed.policyError).toBeUndefined();
+      expect(fixed.decide({ ...req("f", "Bash", { command: "npm install x" }), cwd: proj }).reasons).toContain("approve:ask-npm");
+      expect(fixed.decide({ ...req("f", "Bash", { command: "npm test" }), cwd: proj }).effect).toBe("allow");
+    } finally {
+      fixed.close();
+      rmSync(h, { recursive: true, force: true });
+    }
+  });
+});
