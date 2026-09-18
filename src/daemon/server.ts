@@ -257,7 +257,16 @@ export async function startDaemon(opts: DaemonOptions = {}): Promise<RunningDaem
 
   const wanted = opts.port ?? key?.port ?? 0;
   try {
-    await listen(server, wanted);
+    // A daemon that just retired may hold the port for a moment; wait for it rather than moving house.
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await listen(server, wanted);
+        break;
+      } catch (e) {
+        if ((e as NodeJS.ErrnoException).code !== "EADDRINUSE" || wanted === 0 || attempt >= 15) throw e;
+        await new Promise((r) => setTimeout(r, 200));
+      }
+    }
   } catch (e) {
     if ((e as NodeJS.ErrnoException).code !== "EADDRINUSE" || wanted === 0) throw e;
     log(`port ${wanted} is taken; choosing another. HTTP hooks installed earlier must be reinstalled: yenop init --hook http`);

@@ -35,8 +35,16 @@ export interface ShellFacts {
   secretPath: boolean;
   /** An env var whose name looks like a credential is referenced. */
   secretEnv: boolean;
-  /** A network client is invoked (curl, wget, ssh, scp, rsync, nc, ...). */
+  /** A network client is invoked (curl, wget, ssh, scp, rsync, nc, git clone/pull/push, ...). */
   network: boolean;
+  /** Hosts named in URLs and ssh-style targets. */
+  hosts: string[];
+  /** The network use reaches beyond this machine and private ranges (or the host could not be determined). */
+  externalNetwork: boolean;
+  /** Content is pulled in from the network: curl/wget fetches, git clone/pull/fetch. */
+  download: boolean;
+  /** Reads data that should not travel: credential variables, secret files, database clients, secret managers, environment dumps. */
+  sensitiveRead: boolean;
   /** Something that sends data out: an HTTP write, ssh/scp/rsync, git push, npm publish, docker push. */
   outbound: boolean;
   /** Deletes, force-pushes, destroys, drops, prunes, wipes. */
@@ -74,6 +82,25 @@ const CLOUD_CLIS = new Set(["aws", "gcloud", "az", "flyctl", "fly", "heroku", "v
 const DESTRUCTIVE_SUBCOMMAND = /(^|[-_])(delete|destroy|terminate|remove|rm|rmi|purge|prune|wipe|drop|reset|uninstall|down|teardown)([-_]|$)/i;
 const SQL_VERBS = ["DROP TABLE", "DROP DATABASE", "DROP SCHEMA", "DROP INDEX", "DELETE FROM", "TRUNCATE", "ALTER TABLE"];
 const SECRET_ENV = /(KEY|TOKEN|SECRET|PASS|PASSWORD|PASSWD|CRED|CREDENTIAL|PRIVATE|AUTH)/i;
+const DB_CLIENTS = new Set(["psql", "pg_dump", "pg_dumpall", "mysql", "mysqldump", "mongosh", "mongo", "mongodump", "redis-cli", "sqlite3", "sqlcmd", "clickhouse-client", "bq", "snowsql"]);
+
+/** Loopback, link-local, private ranges, and names that never leave the machine or the LAN. */
+export function isInternalHost(host: string): boolean {
+  const h = host.toLowerCase().replace(/^\[|\]$/g, "");
+  if (h === "localhost" || h === "0.0.0.0" || h === "::1" || h === "host.docker.internal") return true;
+  if (h.endsWith(".localhost") || h.endsWith(".local") || h.endsWith(".internal") || h.endsWith(".lan")) return true;
+  if (/^127\./.test(h) || /^10\./.test(h) || /^192\.168\./.test(h) || /^169\.254\./.test(h)) return true;
+  const m = /^172\.(\d+)\./.exec(h);
+  if (m && Number(m[1]) >= 16 && Number(m[1]) <= 31) return true;
+  if (/^f[cd][0-9a-f]{2}:/.test(h) || /^fe80:/.test(h)) return true;
+  return false;
+}
+
+function hostsIn(arg: string): string[] {
+  const out: string[] = [];
+  for (const m of arg.matchAll(/\b[a-z][a-z0-9+.-]*:\/\/(?:[^\/\s@]+@)?(\[[0-9a-f:]+\]|[^\/\s:?#]+)/gi)) out.push(m[1]!);
+  return out;
+}
 
 /** Convert a glob with `*`, `**`, `?` into a RegExp matched against a full path. */
 export function globToRegExp(glob: string): RegExp {
@@ -377,11 +404,15 @@ export function analyzeShell(command: string, opts: { secretPatterns?: string[];
   const paths = new Set<string>();
   const envRefs = new Set<string>();
   const sql = new Set<string>();
+  const hosts = new Set<string>();
   let sudo = false;
   let pipesToShell = false;
   let network = false;
   let outbound = false;
   let destructive = false;
+  let download = false;
+  let sensitiveRead = false;
+  let hostUnknown = false;
 
   // env refs and SQL from every argument, including quoted strings
   for (const c of commands) {
@@ -395,7 +426,11 @@ export function analyzeShell(command: string, opts: { secretPatterns?: string[];
   const visit = (cmd: SimpleCommand) => {
     const { argv, sudo: s } = stripWrappers(cmd.argv);
     if (s) sudo = true;
-    if (!argv.length) return;
+    if (!argv.length) {
+      // `env` with nothing after it prints the whole environment
+      if (cmd.argv.some((a) => base(a) === "env")) sensitiveRead = true;
+      return;
+    }
     const prog = base(argv[0]!);
     const args = argv.slice(1);
     programs.add(prog);
@@ -432,7 +467,22 @@ export function analyzeShell(command: string, opts: { secretPatterns?: string[];
       if (inner.length) visit({ argv: inner, piped: false, redirects: [] });
     }
 
-    if (NETWORK.has(prog)) network = true;
+    if (NETWORK.has(prog)) {
+      network = true;
+      const before = hosts.size;
+      for (const a of args) {
+        for (const h of hostsIn(a)) hosts.add(h);
+        if (["ssh", "scp", "sftp", "rsync"].includes(prog) && !a.startsWith("-")) {
+          const m = /^(?:[^@\s/]+@)?([A-Za-z0-9._-]+):/.exec(a) ?? (prog === "ssh" ? /^(?:[^@\s/]+@)?([A-Za-z0-9._-]+)$/.exec(a) : null);
+          if (m && m[1] && !m[1].startsWith(".") && m[1].includes(".") ) hosts.add(m[1]);
+          else if (m && m[1] && prog === "ssh") hosts.add(m[1]);
+        }
+      }
+      if (hosts.size === before) hostUnknown = true;
+      if ((prog === "curl" || prog === "wget" || prog === "http" || prog === "https")) download = true;
+    }
+    if (DB_CLIENTS.has(prog)) sensitiveRead = true;
+    if (prog === "printenv") sensitiveRead = true;
 
     // short flags: -rf -> -r, -f
     const flags = new Set<string>();
@@ -472,6 +522,17 @@ export function analyzeShell(command: string, opts: { secretPatterns?: string[];
         if (flags.has("-R")) destructive = true;
         break;
       case "git":
+        if (sub === "clone" || sub === "pull" || sub === "fetch" || sub === "push" || (sub === "remote" && args.includes("update")) || sub === "ls-remote") {
+          network = true;
+          const before = hosts.size;
+          for (const a of args) {
+            for (const h of hostsIn(a)) hosts.add(h);
+            const m = /^(?:[^@\s/]+@)([A-Za-z0-9._-]+):/.exec(a);
+            if (m && m[1]) hosts.add(m[1]);
+          }
+          if (hosts.size === before) hostUnknown = true;
+          if (sub !== "push") download = true;
+        }
         if (sub === "push") {
           outbound = true;
           if (flags.has("--force") || flags.has("-f") || flags.has("--force-with-lease") || args.includes("+")) destructive = true;
@@ -509,6 +570,7 @@ export function analyzeShell(command: string, opts: { secretPatterns?: string[];
         if (sub === "unpublish") destructive = true;
         break;
       case "gh":
+        if (sub === "auth" && (args.includes("token") || args.includes("status"))) sensitiveRead = true;
         if (sub === "pr" && args.includes("merge")) outbound = true;
         if (sub === "release") outbound = true;
         if (sub === "repo" && args.includes("delete")) destructive = true;
@@ -541,11 +603,29 @@ export function analyzeShell(command: string, opts: { secretPatterns?: string[];
         break;
     }
     if (sql.size > 0) destructive = true;
+
+    // secret managers and credential stores
+    const words = args.filter((a) => !a.startsWith("-"));
+    if (
+      (prog === "aws" && (words.includes("secretsmanager") || (words.includes("ssm") && words.some((w) => w.startsWith("get-parameter"))) || (words[0] === "configure" && words[1] === "get"))) ||
+      (prog === "gcloud" && (words[0] === "secrets" || (words[0] === "auth" && words.some((w) => w.startsWith("print-"))))) ||
+      (prog === "az" && words[0] === "keyvault") ||
+      (prog === "vault" && (words[0] === "read" || words[0] === "kv")) ||
+      (prog === "op" && (words[0] === "read" || words[0] === "item")) ||
+      (prog === "doppler" && words[0] === "secrets") ||
+      (prog === "kubectl" && words[0] === "get" && /^secrets?$/.test(words[1] ?? "")) ||
+      (prog === "security" && /^find-(generic|internet)-password$/.test(words[0] ?? "")) ||
+      (prog === "pass" && words.length > 0)
+    ) {
+      sensitiveRead = true;
+    }
   };
   for (const c of commands) visit(c);
 
   const secretPath = [...paths].some((p) => matchesSecretPattern(p, patterns));
   const secretEnv = [...envRefs].some((e) => SECRET_ENV.test(e));
+  if (secretPath || secretEnv) sensitiveRead = true;
+  const externalNetwork = network && (hostUnknown || [...hosts].some((h) => !isInternalHost(h)));
 
   return {
     programs: [...programs],
@@ -560,6 +640,10 @@ export function analyzeShell(command: string, opts: { secretPatterns?: string[];
     secretPath,
     secretEnv,
     network,
+    hosts: [...hosts],
+    externalNetwork,
+    download,
+    sensitiveRead,
     outbound,
     destructive,
   };

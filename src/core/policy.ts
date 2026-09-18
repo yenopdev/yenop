@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import * as cedar from "@cedar-policy/cedar-wasm/nodejs";
-import type { DecisionRequest, PolicyBundle } from "./types.js";
+import type { DecisionRequest, FlowFacts, PolicyBundle, RunFacts } from "./types.js";
 import type { PolicyLayer } from "./config.js";
 import type { ShellFacts } from "./shell.js";
 
@@ -137,7 +137,10 @@ export interface EvalResult {
 
 export interface EvalInput {
   req: DecisionRequest;
-  steps: number;
+  /** What the run has done before this call, with `steps` already counting this one. */
+  run: RunFacts;
+  /** What this call does. */
+  flow: FlowFacts;
   /** Derived facts we compute so policies stay simple. */
   derived: Record<string, cedar.CedarValueJson>;
   /** Parsed shell facts when the tool runs a shell command. */
@@ -170,7 +173,8 @@ function buildCall(input: EvalInput, policies: Record<string, string>): cedar.Au
   const context: Record<string, cedar.CedarValueJson> = {
     args: toCedarValue(req.args),
     call: { __entity: call },
-    run: { steps: input.steps },
+    run: { ...input.run },
+    flow: { ...input.flow },
     cwd: req.cwd ?? "",
     permissionMode: req.permissionMode ?? "",
     derived: input.derived,

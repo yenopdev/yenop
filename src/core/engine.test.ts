@@ -82,8 +82,9 @@ describe("files and MCP", () => {
     expect(d.reasons).toContain("approve:writes-outside-project");
   });
   it("lets MCP read tools through and asks for MCP writes", () => {
-    expect(y.decide(req("mcp__github__list_issues", { repo: "a/b" })).effect).toBe("allow");
-    const d = y.decide(req("mcp__github__create_issue", { repo: "a/b", title: "x" }));
+    // its own run: earlier tests in the shared run touched a database, and sequence rules would ask
+    expect(y.decide(req("mcp__github__list_issues", { repo: "a/b" }, "mcp-run")).effect).toBe("allow");
+    const d = y.decide(req("mcp__github__create_issue", { repo: "a/b", title: "x" }, "mcp-run"));
     expect(d.effect).toBe("ask");
     expect(d.reasons).toContain("approve:mcp-writes");
   });

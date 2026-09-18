@@ -16,6 +16,18 @@ when { context has shell && context.shell.outbound };
 permit (principal, action == Yenop::Action::"call", resource)
 when { context has shell && context.shell.sudo };
 
+// Sequence rules. A plan split into harmless-looking steps still adds up: these look at what the
+// run has already done, not only at this call. Calls to localhost and private ranges do not count.
+
+@id("external-network-after-sensitive-data")
+permit (principal, action == Yenop::Action::"call", resource)
+when { context.run.sensitive && context.flow.externalNetwork };
+
+// Untrusted input, sensitive data, and a way out, all in one run: the exfiltration shape.
+@id("lethal-trifecta")
+permit (principal, action == Yenop::Action::"call", resource)
+when { context.run.untrusted && context.run.sensitive && context.flow.externalNetwork };
+
 @id("mcp-writes")
 permit (principal, action == Yenop::Action::"call", resource)
 when { resource.kind == "mcp" && !resource.readOnly };

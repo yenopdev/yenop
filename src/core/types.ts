@@ -94,6 +94,10 @@ export interface Receipt {
   reasons: string[];
   errors: string[];
   steps: number;
+  /** What this call does. */
+  flow?: FlowFacts;
+  /** What the run had already done when this call was decided. */
+  runBefore?: { untrusted: boolean; sensitive: boolean; outbound: number; destructive: number };
   latencyMs: number;
 }
 
@@ -102,11 +106,36 @@ export interface BudgetLimits {
   maxDeniesPerRun: number;
 }
 
+/** What a run has done so far. Flags are sticky: once true, true for the rest of the run. */
+export interface RunFacts {
+  steps: number;
+  denies: number;
+  asks: number;
+  /** The run has taken in content from outside: web pages, downloads, untrusted MCP reads. */
+  untrusted: boolean;
+  /** The run has touched data that should not travel. */
+  sensitive: boolean;
+  /** Calls that sent data out. */
+  outbound: number;
+  /** Destructive calls that were not denied. */
+  destructive: number;
+}
+
+/** What one call does, independent of which tool did it. */
+export interface FlowFacts {
+  ingestsUntrusted: boolean;
+  readsSensitive: boolean;
+  usesNetwork: boolean;
+  externalNetwork: boolean;
+  sendsOut: boolean;
+  changesState: boolean;
+}
+
 export interface RunStateStore {
-  /** Atomically records one call and returns the counters after it. */
-  bump(tenant: string, runId: string, effect: Effect): { steps: number; denies: number; asks: number };
-  /** Read counters without changing them. */
-  peek(tenant: string, runId: string): { steps: number; denies: number; asks: number };
+  /** Atomically records one call, folds its flow into the run, and returns the run's facts after it. */
+  bump(tenant: string, runId: string, effect: Effect, flow?: FlowFacts): RunFacts;
+  /** Read the run's facts without changing them. */
+  peek(tenant: string, runId: string): RunFacts;
   /** Idempotency: the decision already made for this call id in this run, if any. */
   recallCall(tenant: string, runId: string, callId: string): Decision | undefined;
   /** Remember a decision so a repeated hook firing for the same call returns it unchanged. */

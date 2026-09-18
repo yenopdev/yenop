@@ -35,8 +35,33 @@ namespace Yenop {
     secretPath: Bool,
     secretEnv: Bool,
     network: Bool,
+    hosts: Set<String>,
+    externalNetwork: Bool,
+    download: Bool,
+    sensitiveRead: Bool,
     outbound: Bool,
     destructive: Bool,
+  };
+
+  // What the run has done before this call. Flags are sticky for the rest of the run.
+  type Run = {
+    steps: Long,
+    denies: Long,
+    asks: Long,
+    untrusted: Bool,
+    sensitive: Bool,
+    outbound: Long,
+    destructive: Long,
+  };
+
+  // What this call does, whichever tool does it.
+  type Flow = {
+    ingestsUntrusted: Bool,
+    readsSensitive: Bool,
+    usesNetwork: Bool,
+    externalNetwork: Bool,
+    sendsOut: Bool,
+    changesState: Bool,
   };
 
   // Facts derived from a file argument (present when the tool takes a path).
@@ -64,7 +89,8 @@ namespace Yenop {
         prompt?: String,
       },
       call: Call,
-      run: { steps: Long },
+      run: Run,
+      flow: Flow,
       cwd: String,
       permissionMode: String,
       derived: Derived,

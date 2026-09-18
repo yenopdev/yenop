@@ -22,6 +22,12 @@ export interface YenopConfig {
   tenant: TenantRef;
   /** Secret-file patterns: the defaults plus anything added in config.json. */
   secretPatterns: string[];
+  /** File patterns whose contents count as sensitive data for run-level rules (not blocked, but remembered). */
+  sensitivePatterns: string[];
+  /** MCP servers whose reads are trusted content. Everything else read over MCP counts as untrusted input. */
+  trustedServers: string[];
+  /** MCP servers whose reads count as sensitive data. */
+  sensitiveServers: string[];
   /** enforce: decisions are returned to the runtime. observe: decisions are only recorded. */
   mode: Mode;
   budgets: BudgetLimits;
@@ -51,6 +57,9 @@ export function loadConfig(opts: { cwd?: string; home?: string; builtinPoliciesD
     budgets: Partial<BudgetLimits>;
     disabledPolicies: string[];
     secretPatterns: string[];
+    sensitivePatterns: string[];
+    trustedServers: string[];
+    sensitiveServers: string[];
   }>;
   const readCfg = (path: string): FileCfg => {
     if (!existsSync(path)) return {};
@@ -81,10 +90,14 @@ export function loadConfig(opts: { cwd?: string; home?: string; builtinPoliciesD
   const disabledPolicies = [...new Set([...(homeCfg.disabledPolicies ?? []), ...(projectCfg.disabledPolicies ?? [])])];
   const secretPatterns = [...DEFAULT_SECRET_PATTERNS, ...(homeCfg.secretPatterns ?? []), ...(projectCfg.secretPatterns ?? [])];
   const tenant = resolveTenant(fileCfg.tenant);
+  const both = (k: "sensitivePatterns" | "trustedServers" | "sensitiveServers") => [...new Set([...(homeCfg[k] ?? []), ...(projectCfg[k] ?? [])])];
   return {
     home,
     tenant,
     secretPatterns,
+    sensitivePatterns: both("sensitivePatterns"),
+    trustedServers: both("trustedServers"),
+    sensitiveServers: both("sensitiveServers"),
     mode,
     budgets: { ...DEFAULT_BUDGETS, ...(fileCfg.budgets ?? {}) },
     policyLayers,

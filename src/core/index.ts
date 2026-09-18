@@ -14,7 +14,7 @@ export { loadPolicies, checkPolicies, evaluate, toCedarValue } from "./policy.js
 export { RECEIPT_VERSION } from "./types.js";
 export { decide } from "./engine.js";
 export { uuidv7, uuidv7Time, newTenantId } from "./ids.js";
-export { analyzeShell, matchesSecretPattern, DEFAULT_SECRET_PATTERNS, type ShellFacts } from "./shell.js";
+export { analyzeShell, matchesSecretPattern, isInternalHost, DEFAULT_SECRET_PATTERNS, type ShellFacts } from "./shell.js";
 export { loadSchema, validateAgainstSchema } from "./policy.js";
 export { CONFIG_VERSION, resolveTenant, localTenantId } from "./config.js";
 export { STATE_VERSION } from "./state.js";
@@ -54,6 +54,9 @@ export function openYenop(opts: OpenOptions = {}): Yenop {
     mode: config.mode,
     policies: loadPolicies(config.policyLayers, { disabled: config.disabledPolicies }),
     secretPatterns: config.secretPatterns,
+    sensitivePatterns: config.sensitivePatterns,
+    trustedServers: config.trustedServers,
+    sensitiveServers: config.sensitiveServers,
     budgets: config.budgets,
     state: opts.state ?? (opts.dryRun ? new MemoryRunState() : new SqliteRunState(config.statePath)),
     receipts: opts.receipts ?? (opts.dryRun ? new NullReceipts() : new JsonlReceipts(config.receiptsPath)),

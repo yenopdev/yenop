@@ -1,10 +1,30 @@
 import { DatabaseSync } from "node:sqlite";
-import type { Decision, Effect, RunStateStore } from "./types.js";
+import type { Decision, Effect, FlowFacts, RunFacts, RunStateStore } from "./types.js";
 
-/** Schema version of the local state database, stored in PRAGMA user_version. */
-export const STATE_VERSION = 1;
+/** Schema version of the local state database, stored in PRAGMA user_version. 2 added run facts. */
+export const STATE_VERSION = 2;
 
-/** Run counters in a local SQLite file. One row per (tenant, run). Increments are atomic. */
+interface Row {
+  steps: number;
+  denies: number;
+  asks: number;
+  untrusted: number;
+  sensitive: number;
+  outbound: number;
+  destructive: number;
+}
+const EMPTY: RunFacts = { steps: 0, denies: 0, asks: 0, untrusted: false, sensitive: false, outbound: 0, destructive: 0 };
+const toFacts = (r: Row): RunFacts => ({
+  steps: Number(r.steps),
+  denies: Number(r.denies),
+  asks: Number(r.asks),
+  untrusted: Number(r.untrusted) > 0,
+  sensitive: Number(r.sensitive) > 0,
+  outbound: Number(r.outbound),
+  destructive: Number(r.destructive),
+});
+
+/** Run facts in a local SQLite file. One row per (tenant, run). Updates are atomic. */
 export class SqliteRunState implements RunStateStore {
   private db: DatabaseSync;
   private bumpStmt;
@@ -24,6 +44,10 @@ export class SqliteRunState implements RunStateStore {
         steps INTEGER NOT NULL DEFAULT 0,
         denies INTEGER NOT NULL DEFAULT 0,
         asks INTEGER NOT NULL DEFAULT 0,
+        untrusted INTEGER NOT NULL DEFAULT 0,
+        sensitive INTEGER NOT NULL DEFAULT 0,
+        outbound INTEGER NOT NULL DEFAULT 0,
+        destructive INTEGER NOT NULL DEFAULT 0,
         started_at TEXT NOT NULL,
         last_at TEXT NOT NULL,
         PRIMARY KEY (tenant, run_id)
@@ -36,19 +60,28 @@ export class SqliteRunState implements RunStateStore {
         at TEXT NOT NULL,
         PRIMARY KEY (tenant, run_id, call_id)
       );
-      PRAGMA user_version = ${STATE_VERSION};
     `);
+    // version 1 databases have the runs table without the fact columns
+    const cols = new Set((this.db.prepare("PRAGMA table_info(runs)").all() as { name: string }[]).map((c) => c.name));
+    for (const c of ["untrusted", "sensitive", "outbound", "destructive"]) {
+      if (!cols.has(c)) this.db.exec(`ALTER TABLE runs ADD COLUMN ${c} INTEGER NOT NULL DEFAULT 0`);
+    }
+    this.db.exec(`PRAGMA user_version = ${STATE_VERSION}`);
     this.bumpStmt = this.db.prepare(`
-      INSERT INTO runs (tenant, run_id, steps, denies, asks, started_at, last_at)
-      VALUES (?, ?, 1, ?, ?, ?, ?)
+      INSERT INTO runs (tenant, run_id, steps, denies, asks, untrusted, sensitive, outbound, destructive, started_at, last_at)
+      VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(tenant, run_id) DO UPDATE SET
         steps = steps + 1,
         denies = denies + excluded.denies,
         asks = asks + excluded.asks,
+        untrusted = MAX(untrusted, excluded.untrusted),
+        sensitive = MAX(sensitive, excluded.sensitive),
+        outbound = outbound + excluded.outbound,
+        destructive = destructive + excluded.destructive,
         last_at = excluded.last_at
-      RETURNING steps, denies, asks
+      RETURNING steps, denies, asks, untrusted, sensitive, outbound, destructive
     `);
-    this.peekStmt = this.db.prepare(`SELECT steps, denies, asks FROM runs WHERE tenant = ? AND run_id = ?`);
+    this.peekStmt = this.db.prepare(`SELECT steps, denies, asks, untrusted, sensitive, outbound, destructive FROM runs WHERE tenant = ? AND run_id = ?`);
     this.recallStmt = this.db.prepare(`SELECT decision FROM calls WHERE tenant = ? AND run_id = ? AND call_id = ?`);
     this.rememberStmt = this.db.prepare(`INSERT OR IGNORE INTO calls (tenant, run_id, call_id, decision, at) VALUES (?, ?, ?, ?, ?)`);
   }
@@ -62,18 +95,29 @@ export class SqliteRunState implements RunStateStore {
     this.rememberStmt.run(tenant, runId, callId, JSON.stringify(decision), new Date().toISOString());
   }
 
-  bump(tenant: string, runId: string, effect: Effect): { steps: number; denies: number; asks: number } {
+  bump(tenant: string, runId: string, effect: Effect, flow?: FlowFacts): RunFacts {
     const now = new Date().toISOString();
-    const row = this.bumpStmt.get(tenant, runId, effect === "deny" ? 1 : 0, effect === "ask" ? 1 : 0, now, now) as
-      | { steps: number; denies: number; asks: number }
-      | undefined;
+    // A denied call did not happen, so it leaves no mark on the run.
+    const f = effect === "deny" ? undefined : flow;
+    const row = this.bumpStmt.get(
+      tenant,
+      runId,
+      effect === "deny" ? 1 : 0,
+      effect === "ask" ? 1 : 0,
+      f?.ingestsUntrusted ? 1 : 0,
+      f?.readsSensitive ? 1 : 0,
+      f?.sendsOut ? 1 : 0,
+      f?.changesState ? 1 : 0,
+      now,
+      now,
+    ) as Row | undefined;
     if (!row) throw new Error("yenop: state bump returned no row");
-    return { steps: Number(row.steps), denies: Number(row.denies), asks: Number(row.asks) };
+    return toFacts(row);
   }
 
-  peek(tenant: string, runId: string): { steps: number; denies: number; asks: number } {
-    const row = this.peekStmt.get(tenant, runId) as { steps: number; denies: number; asks: number } | undefined;
-    return row ? { steps: Number(row.steps), denies: Number(row.denies), asks: Number(row.asks) } : { steps: 0, denies: 0, asks: 0 };
+  peek(tenant: string, runId: string): RunFacts {
+    const row = this.peekStmt.get(tenant, runId) as Row | undefined;
+    return row ? toFacts(row) : { ...EMPTY };
   }
 
   close(): void {
@@ -83,18 +127,24 @@ export class SqliteRunState implements RunStateStore {
 
 /** Counters that live only for the life of the process. Used by dry runs and tests. */
 export class MemoryRunState implements RunStateStore {
-  private runs = new Map<string, { steps: number; denies: number; asks: number }>();
-  bump(tenant: string, runId: string, effect: Effect): { steps: number; denies: number; asks: number } {
+  private runs = new Map<string, RunFacts>();
+  bump(tenant: string, runId: string, effect: Effect, flow?: FlowFacts): RunFacts {
     const k = `${tenant}\u0000${runId}`;
-    const r = this.runs.get(k) ?? { steps: 0, denies: 0, asks: 0 };
+    const r = this.runs.get(k) ?? { ...EMPTY };
     r.steps += 1;
     if (effect === "deny") r.denies += 1;
     if (effect === "ask") r.asks += 1;
+    if (effect !== "deny" && flow) {
+      r.untrusted ||= flow.ingestsUntrusted;
+      r.sensitive ||= flow.readsSensitive;
+      if (flow.sendsOut) r.outbound += 1;
+      if (flow.changesState) r.destructive += 1;
+    }
     this.runs.set(k, r);
     return { ...r };
   }
-  peek(tenant: string, runId: string): { steps: number; denies: number; asks: number } {
-    return { ...(this.runs.get(`${tenant}\u0000${runId}`) ?? { steps: 0, denies: 0, asks: 0 }) };
+  peek(tenant: string, runId: string): RunFacts {
+    return { ...(this.runs.get(`${tenant}\u0000${runId}`) ?? EMPTY) };
   }
   private calls = new Map<string, Decision>();
   recallCall(tenant: string, runId: string, callId: string): Decision | undefined {

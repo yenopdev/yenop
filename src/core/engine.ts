@@ -1,15 +1,19 @@
 import { uuidv7 } from "./ids.js";
 import { isAbsolute, resolve, sep } from "node:path";
-import type { BudgetLimits, Decision, DecisionRequest, Effect, PolicyBundle, Receipt, ReceiptSink, RunStateStore } from "./types.js";
+import type { BudgetLimits, Decision, DecisionRequest, Effect, FlowFacts, PolicyBundle, Receipt, ReceiptSink, RunStateStore } from "./types.js";
+import type { ShellFacts } from "./shell.js";
 import { evaluate, type EvalInput } from "./policy.js";
 import { trimForReceipt } from "./receipts.js";
-import { analyzeShell, matchesSecretPattern } from "./shell.js";
+import { analyzeShell, isInternalHost, matchesSecretPattern } from "./shell.js";
 import { RECEIPT_VERSION } from "./types.js";
 
 export interface EngineDeps {
   tenant: import("./types.js").TenantRef;
   mode: "enforce" | "observe";
   secretPatterns: string[];
+  sensitivePatterns?: string[];
+  trustedServers?: string[];
+  sensitiveServers?: string[];
   policies: PolicyBundle;
   budgets: BudgetLimits;
   state: RunStateStore;
@@ -34,6 +38,67 @@ function derive(req: DecisionRequest, secretPatterns: string[]): Record<string, 
 }
 
 /**
+ * What this call does, in terms that do not depend on the tool: does it take in outside content,
+ * read data that should not travel, reach beyond this machine, send data out, change state.
+ * Run-level rules are written against these, so a plan split across harmless-looking calls still adds up.
+ */
+function flowOf(deps: EngineDeps, req: DecisionRequest, derived: Record<string, string | number | boolean>, shell: ShellFacts | undefined): FlowFacts {
+  const f: FlowFacts = { ingestsUntrusted: false, readsSensitive: false, usesNetwork: false, externalNetwork: false, sendsOut: false, changesState: false };
+  const path = typeof derived["absolutePath"] === "string" ? (derived["absolutePath"] as string) : undefined;
+  const sensitiveFile = path !== undefined && (derived["secretPath"] === true || matchesSecretPattern(path, deps.sensitivePatterns ?? []));
+  switch (req.tool.kind) {
+    case "shell":
+      if (shell) {
+        f.ingestsUntrusted = shell.download;
+        f.readsSensitive = shell.sensitiveRead || shell.paths.some((p) => matchesSecretPattern(p, deps.sensitivePatterns ?? []));
+        f.usesNetwork = shell.network;
+        f.externalNetwork = shell.externalNetwork;
+        f.sendsOut = shell.outbound;
+        f.changesState = shell.destructive;
+      }
+      break;
+    case "web": {
+      f.usesNetwork = true;
+      const url = typeof req.args["url"] === "string" ? (req.args["url"] as string) : undefined;
+      let host: string | undefined;
+      try {
+        host = url ? new URL(url).hostname : undefined;
+      } catch {
+        host = undefined;
+      }
+      f.externalNetwork = host === undefined || !isInternalHost(host);
+      if (req.tool.readOnly) f.ingestsUntrusted = f.externalNetwork;
+      else f.sendsOut = true;
+      break;
+    }
+    case "mcp": {
+      const server = req.tool.server ?? "";
+      const trusted = (deps.trustedServers ?? []).includes(server);
+      f.usesNetwork = true;
+      // A server the customer vouches for is neither an untrusted source nor a way out.
+      f.externalNetwork = !trusted;
+      if (req.tool.readOnly) {
+        f.ingestsUntrusted = !trusted;
+        f.readsSensitive = (deps.sensitiveServers ?? []).includes(server);
+      } else {
+        f.sendsOut = true;
+        f.changesState = true;
+      }
+      break;
+    }
+    case "read":
+      f.readsSensitive = sensitiveFile;
+      break;
+    case "write":
+      f.changesState = true;
+      break;
+    case "unknown":
+      break;
+  }
+  return f;
+}
+
+/**
  * The decision path, in order:
  *   1. budget breakers (cheapest, stops runaway loops)
  *   2. permit policies: may this happen at all? (Cedar default deny; errors fail closed)
@@ -52,6 +117,10 @@ export function decide(deps: EngineDeps, req: DecisionRequest): Decision {
   const errors: string[] = [];
   let effect: Effect;
   let message: string;
+  const derived = derive(req, deps.secretPatterns);
+  const cmd = req.args["command"];
+  const shell = req.tool.kind === "shell" && typeof cmd === "string" ? analyzeShell(cmd, { secretPatterns: deps.secretPatterns }) : undefined;
+  const flow = flowOf(deps, req, derived, shell);
 
   if (steps > deps.budgets.maxStepsPerRun) {
     effect = "deny";
@@ -62,9 +131,8 @@ export function decide(deps: EngineDeps, req: DecisionRequest): Decision {
     reasons.push("breaker:max-denies");
     message = `Run hit ${deps.budgets.maxDeniesPerRun} denied calls; Yenop halted further actions.`;
   } else {
-    const input: EvalInput = { req, steps, derived: derive(req, deps.secretPatterns) };
-    const cmd = req.args["command"];
-    if (req.tool.kind === "shell" && typeof cmd === "string") input.shell = analyzeShell(cmd, { secretPatterns: deps.secretPatterns });
+    const input: EvalInput = { req, run: { ...before, steps }, flow, derived };
+    if (shell) input.shell = shell;
     const permit = evaluate(input, deps.policies.permit);
     errors.push(...permit.errors);
     if (permit.decision === "deny" || permit.errors.length > 0) {
@@ -94,7 +162,7 @@ export function decide(deps: EngineDeps, req: DecisionRequest): Decision {
     }
   }
 
-  const after = deps.state.bump(deps.tenant.id, req.runId, effect);
+  const after = deps.state.bump(deps.tenant.id, req.runId, effect, flow);
   const latencyMs = Number(process.hrtime.bigint() - t0) / 1e6;
   const receipt: Receipt = {
     v: RECEIPT_VERSION,
@@ -114,6 +182,8 @@ export function decide(deps: EngineDeps, req: DecisionRequest): Decision {
     reasons,
     errors,
     steps: after.steps,
+    flow,
+    runBefore: { untrusted: before.untrusted, sensitive: before.sensitive, outbound: before.outbound, destructive: before.destructive },
     latencyMs: Math.round(latencyMs * 100) / 100,
   };
   if (req.callId !== undefined) receipt.callId = req.callId;
