@@ -12,6 +12,12 @@
 - Policies are layered: baseline (shipped, in `policies/`), home (`~/.yenop/policies`), project (`<repo>/.yenop/policies`), plus `disabledPolicies` in config. Init never copies the baseline; users never edit shipped files.
 - Every policy has an `@id`. Evaluation errors fail closed. The Claude Code adapter only tightens: it prints nothing on allow.
 
+## Approvals and answers
+- `explainAsk` in `src/core/engine.ts` builds the history sentence from the step history in the state store (`run_steps`, STATE_VERSION 3). Keep it one paragraph: Claude Code shows the reason as plain text.
+- Outcome receipts (`kind: "outcome"`) are written only for calls Yenop asked about, once per call, linked by `decisionId`. Decision receipts carry `kind: "decision"`; lines without `kind` are older decisions.
+- Claude Code events: `PreToolUse` decides and blocks; `PostToolUse`, `PostToolUseFailure` and `PermissionDenied` only report and are installed with `async: true` so the agent never waits on them. There is no event for a person clicking Deny; `answersFor` infers it.
+- Any CLI path that writes files must be awaited before `process.exit`. The playground lost its hook registration to that race once.
+
 ## Failing closed
 - Three places can fail: evaluating a policy, loading policies, and Yenop itself. All three end in deny when the mode is enforce. `openYenop` never throws on bad policies; it returns an instance with `policyError` whose every decision is `breaker:policies-invalid`. The hook command turns any unexpected exception into a deny with exit 2, because Claude Code reads every other exit code as "no opinion".
 - The CLI must stay usable in the broken state. Never make `check`, `status`, `receipts` or `schema` depend on policies loading.

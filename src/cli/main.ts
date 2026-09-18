@@ -104,10 +104,12 @@ async function main(argv: string[]): Promise<number> {
     }
     case "receipts": {
       const { values } = parseArgs({ args: rest, options: { last: { type: "string", default: "20" }, run: { type: "string" }, all: { type: "boolean", default: false } } });
-      const { openYenop, readReceipts } = await import("../core/index.js");
+      const { openYenop, readAllReceipts, answersFor, isOutcome } = await import("../core/index.js");
       const y = openYenop({ cwd: process.cwd(), dryRun: true });
       try {
-        let rows = readReceipts(y.config.receiptsPath, 10_000);
+        const everything = readAllReceipts(y.config.receiptsPath);
+        const answers = answersFor(everything);
+        let rows = everything.filter((r) => !isOutcome(r)) as import("../core/index.js").Receipt[];
         // One receipts file serves every project on the machine; show this project's tenant unless asked for all.
         const mine = y.config.tenant;
         if (!values.all) rows = rows.filter((r) => (typeof r.tenant === "string" ? r.tenant === mine.name : r.tenant.id === mine.id));
@@ -120,7 +122,8 @@ async function main(argv: string[]): Promise<number> {
         for (const r of rows) {
           const summary = summarizeArgs(r.args);
           const tenantName = typeof r.tenant === "string" ? r.tenant : r.tenant.name;
-          const tag = r.mode === "observe" ? "  (observe)" : r.enforced ? "" : "  (not enforced)";
+          const answer = answers.get(r.id);
+          const tag = (r.mode === "observe" ? "  (observe)" : r.enforced ? "" : "  (not enforced)") + (answer ? `  → ${answer}` : "");
           process.stdout.write(`${r.ts}  ${pad(tenantName, 10)} ${pad(r.effect.toUpperCase(), 5)}  ${pad(r.tool, 20)} ${summary}  [${r.reasons.join(", ")}]${tag}\n`);
         }
         return 0;
@@ -163,7 +166,7 @@ async function main(argv: string[]): Promise<number> {
       const dir = resolve(rest[0] ?? join(homedir(), "yenop-playground"));
       const { hookCommandFor } = await import("../adapters/claude-code/install.js");
       const { CONFIG_VERSION, newTenantId } = await import("../core/index.js");
-      writePlayground(dir, hookCommandFor(fileURLToPath(import.meta.url)), CONFIG_VERSION, newTenantId());
+      await writePlayground(dir, hookCommandFor(fileURLToPath(import.meta.url)), CONFIG_VERSION, newTenantId());
       process.stdout.write(`playground ready at ${dir} (enforce mode)\n`);
       process.stdout.write(`open that folder in Claude Code and try:\n`);
       process.stdout.write(`  - "delete the build folder with rm -rf"          -> Yenop asks\n`);
@@ -350,22 +353,35 @@ function migrateCopiedBaseline(policiesDir: string, baselineDir: string): void {
   }
 }
 
-function writePlayground(dir: string, hookCommand: string, configVersion: number, tenantId: string): void {
+async function writePlayground(dir: string, hookCommand: string, configVersion: number, tenantId: string): Promise<void> {
   const w = (rel: string, content: string) => {
     const p = join(dir, rel);
     mkdirSync(join(p, ".."), { recursive: true });
     writeFileSync(p, content);
   };
   w("README.md", "# Yenop playground\n\nA fake project for testing Yenop under enforcement. Nothing here is real. Delete the folder when done.\n");
-  w(".yenop/config.json", JSON.stringify({ v: configVersion, tenant: { id: tenantId, name: "playground" }, mode: "enforce" }, null, 2) + "\n");
+  // A tenant id never changes once issued. Refreshing the playground must keep the id it already has,
+  // or its earlier receipts stop matching.
+  let tenant = { id: tenantId, name: "playground" };
+  const cfgPath = join(dir, ".yenop", "config.json");
+  if (existsSync(cfgPath)) {
+    try {
+      const prev = JSON.parse(readFileSync(cfgPath, "utf8")) as { tenant?: { id?: string; name?: string } };
+      if (prev.tenant?.id) tenant = { id: prev.tenant.id, name: prev.tenant.name ?? "playground" };
+    } catch {
+      /* unreadable config: issue a fresh id */
+    }
+  }
+  w(".yenop/config.json", JSON.stringify({ v: configVersion, tenant, mode: "enforce" }, null, 2) + "\n");
   w("package.json", JSON.stringify({ name: "playground", private: true, scripts: { test: "node -e \"console.log('tests: 3 passed')\"", build: "mkdir -p build && echo built > build/out.txt" } }, null, 2) + "\n");
   w("build/out.txt", "built\n");
   w("infra/main.tf", 'resource "aws_db_instance" "prod" {\n  identifier = "prod-db"\n  allocated_storage = 100\n}\n');
   w(".env", "DATABASE_URL=postgres://app:not-a-real-password@db.internal:5432/prod\nSTRIPE_KEY=sk_test_not_real\n");
   w("src/app.js", "console.log('hello from the playground');\n");
   w(".yenop/policies/README.md", "# Policies for this project\n\nRun `yenop schema` for the vocabulary and an example, `yenop check` to validate, `yenop explain` to try a call.\nA permit in `approve/` means ask a person. A forbid in `permit/` means never.\nAn invalid policy file makes Yenop refuse every action in this project until it is fixed.\n");
-  // written lazily to avoid loading the installer for other commands
-  import("../adapters/claude-code/install.js").then(({ installClaudeCodeHook }) => installClaudeCodeHook(join(dir, ".claude", "settings.local.json"), hookCommand));
+  // loaded lazily so other commands do not pay for the installer; awaited, or the process exits before the file is written
+  const { installClaudeCodeHook } = await import("../adapters/claude-code/install.js");
+  installClaudeCodeHook(join(dir, ".claude", "settings.local.json"), hookCommand);
 }
 
 function fail(msg: string): number {

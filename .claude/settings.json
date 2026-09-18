@@ -12,6 +12,45 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/dist/cli/main.js\" hook claude-code",
+            "timeout": 15,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/dist/cli/main.js\" hook claude-code",
+            "timeout": 15,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "PermissionDenied": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/dist/cli/main.js\" hook claude-code",
+            "timeout": 15,
+            "async": true
+          }
+        ]
+      }
     ]
   }
 }

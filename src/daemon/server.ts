@@ -15,7 +15,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { openYenop, type Yenop, type DecisionRequest } from "../core/index.js";
-import { toDecisionRequest, hookDecisionBody, type ClaudeCodeHookInput } from "../adapters/claude-code/hook.js";
+import { toDecisionRequest, hookDecisionBody, runIdOf, OUTCOME_EVENTS, type ClaudeCodeHookInput } from "../adapters/claude-code/hook.js";
 
 export interface DaemonInfo {
   pid: number;
@@ -227,6 +227,11 @@ export async function startDaemon(opts: DaemonOptions = {}): Promise<RunningDaem
           }
           if (!input.tool_name || !input.session_id) return send(res, 200, {});
           const y = cache.get(input.cwd);
+          const outcome = OUTCOME_EVENTS[input.hook_event_name ?? ""];
+          if (outcome) {
+            if (input.tool_use_id) y.recordOutcome(runIdOf(input), input.tool_use_id, input.tool_name, outcome, input.denial_reason);
+            return send(res, 200, {});
+          }
           const d = y.decide(toDecisionRequest(input));
           decisions++;
           const body = hookDecisionBody(d.effect, d.message, y.config.mode);

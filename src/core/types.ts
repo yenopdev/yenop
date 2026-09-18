@@ -74,6 +74,8 @@ export const RECEIPT_VERSION = 1;
 export interface Receipt {
   /** Receipt format version. Parsers must reject versions they do not know. */
   v: number;
+  /** "decision" (absent on older lines). Outcome lines carry kind "outcome". */
+  kind?: "decision";
   id: string;
   ts: string;
   tenant: TenantRef;
@@ -131,6 +133,39 @@ export interface FlowFacts {
   changesState: boolean;
 }
 
+/** What happened to a call after Yenop asked: it ran, it ran and failed, or the permission system refused it. */
+export type Outcome = "ran" | "failed" | "denied";
+
+/** One line of a run's history, kept so an approval can show how the run got here. */
+export interface StepRecord {
+  step: number;
+  callId?: string;
+  tool: string;
+  /** Short, single-line description of the call: the command, path, URL or query. */
+  summary: string;
+  effect: Effect;
+  ingestsUntrusted: boolean;
+  readsSensitive: boolean;
+  receiptId: string;
+  outcome?: Outcome;
+}
+
+/** Written when the runtime reports what became of a call Yenop asked about. */
+export interface OutcomeReceipt {
+  v: number;
+  kind: "outcome";
+  id: string;
+  ts: string;
+  tenant: TenantRef;
+  runId: string;
+  callId: string;
+  tool: string;
+  outcome: Outcome;
+  /** The decision receipt this answers. */
+  decisionId: string;
+  detail?: string;
+}
+
 export interface RunStateStore {
   /** Atomically records one call, folds its flow into the run, and returns the run's facts after it. */
   bump(tenant: string, runId: string, effect: Effect, flow?: FlowFacts): RunFacts;
@@ -140,11 +175,19 @@ export interface RunStateStore {
   recallCall(tenant: string, runId: string, callId: string): Decision | undefined;
   /** Remember a decision so a repeated hook firing for the same call returns it unchanged. */
   rememberCall(tenant: string, runId: string, callId: string, decision: Decision): void;
+  /** Append one step to the run's history. */
+  recordStep(tenant: string, runId: string, step: StepRecord): void;
+  /** The last `limit` steps of the run, oldest first. */
+  recentSteps(tenant: string, runId: string, limit: number): StepRecord[];
+  /** The steps that first made the run untrusted and sensitive, if any. */
+  markSources(tenant: string, runId: string): { untrusted?: StepRecord; sensitive?: StepRecord };
+  /** Record what became of a call. Returns the step if this is the first outcome for it, else undefined. */
+  setOutcome(tenant: string, runId: string, callId: string, outcome: Outcome): StepRecord | undefined;
   close(): void;
 }
 
 export interface ReceiptSink {
-  append(receipt: Receipt): void;
+  append(receipt: Receipt | OutcomeReceipt): void;
   close(): void;
 }
 

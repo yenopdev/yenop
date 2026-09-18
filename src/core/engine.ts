@@ -1,9 +1,9 @@
 import { uuidv7 } from "./ids.js";
 import { isAbsolute, resolve, sep } from "node:path";
-import type { BudgetLimits, Decision, DecisionRequest, Effect, FlowFacts, PolicyBundle, Receipt, ReceiptSink, RunStateStore } from "./types.js";
+import type { BudgetLimits, Decision, DecisionRequest, Effect, FlowFacts, Outcome, OutcomeReceipt, PolicyBundle, Receipt, ReceiptSink, RunStateStore, StepRecord } from "./types.js";
 import type { ShellFacts } from "./shell.js";
 import { evaluate, type EvalInput } from "./policy.js";
-import { trimForReceipt } from "./receipts.js";
+import { summarizeCall, trimForReceipt } from "./receipts.js";
 import { analyzeShell, isControlPlanePath, isInternalHost, matchesSecretPattern } from "./shell.js";
 import { RECEIPT_VERSION } from "./types.js";
 
@@ -102,6 +102,53 @@ function flowOf(deps: EngineDeps, req: DecisionRequest, derived: Record<string, 
 }
 
 /**
+ * The person deciding cannot see the model's reasoning, so an ask carries the run's history instead:
+ * which earlier steps made the run untrusted or sensitive, and what it did just before this call.
+ */
+function explainAsk(deps: EngineDeps, runId: string, before: { untrusted: boolean; sensitive: boolean }): string {
+  // Claude Code shows this as plain text in a small box. Keep it to a glance: short summaries, nothing said twice.
+  const clip = (t: string, n: number) => (t.length > n ? t.slice(0, n - 1) + "…" : t);
+  const parts: string[] = [];
+  const cited = new Set<number>();
+  const src = deps.state.markSources(deps.tenant.id, runId);
+  const at = (s: StepRecord) => {
+    cited.add(s.step);
+    return `step ${s.step} (${s.tool}: ${clip(s.summary, 40)})`;
+  };
+  if (before.untrusted && src.untrusted) parts.push(`took in outside content at ${at(src.untrusted)}`);
+  if (before.sensitive && src.sensitive) parts.push(`touched sensitive data at ${at(src.sensitive)}`);
+  const recent = deps.state.recentSteps(deps.tenant.id, runId, 3).filter((s) => !cited.has(s.step));
+  let text = "";
+  if (parts.length) text += ` Earlier in this run the agent ${parts.join(" and ")}.`;
+  if (recent.length) text += ` Just before: ${recent.map((s) => `${s.step} ${s.tool} ${clip(s.summary, 32)}`).join("; ")}.`;
+  return text;
+}
+
+/**
+ * Record what the runtime reports about a call after the fact. Only asks are tracked: the question an auditor
+ * has is "what did the person answer", and an allowed call that ran answers nothing.
+ */
+export function recordOutcome(deps: EngineDeps, runId: string, callId: string, tool: string, outcome: Outcome, detail?: string): OutcomeReceipt | undefined {
+  const step = deps.state.setOutcome(deps.tenant.id, runId, callId, outcome);
+  if (!step || step.effect !== "ask") return undefined;
+  const r: OutcomeReceipt = {
+    v: RECEIPT_VERSION,
+    kind: "outcome",
+    id: uuidv7(),
+    ts: (deps.now ?? (() => new Date()))().toISOString(),
+    tenant: deps.tenant,
+    runId,
+    callId,
+    tool,
+    outcome,
+    decisionId: step.receiptId,
+  };
+  if (detail) r.detail = detail.slice(0, 300);
+  deps.receipts.append(r);
+  return r;
+}
+
+/**
  * The decision path, in order:
  *   1. budget breakers (cheapest, stops runaway loops)
  *   2. permit policies: may this happen at all? (Cedar default deny; errors fail closed)
@@ -174,6 +221,7 @@ export function decide(deps: EngineDeps, req: DecisionRequest): Decision {
   const latencyMs = Number(process.hrtime.bigint() - t0) / 1e6;
   const receipt: Receipt = {
     v: RECEIPT_VERSION,
+    kind: "decision",
     id: uuidv7(),
     ts: (deps.now ?? (() => new Date()))().toISOString(),
     tenant: deps.tenant,
@@ -198,6 +246,19 @@ export function decide(deps: EngineDeps, req: DecisionRequest): Decision {
   if (req.cwd !== undefined) receipt.cwd = req.cwd;
   if (req.permissionMode !== undefined) receipt.permissionMode = req.permissionMode;
   deps.receipts.append(receipt);
+
+  if (effect === "ask") message += explainAsk(deps, req.runId, before);
+  const stepRecord: StepRecord = {
+    step: after.steps,
+    tool: req.tool.name,
+    summary: summarizeCall(req.args),
+    effect,
+    ingestsUntrusted: flow.ingestsUntrusted,
+    readsSensitive: flow.readsSensitive,
+    receiptId: receipt.id,
+  };
+  if (req.callId !== undefined) stepRecord.callId = req.callId;
+  deps.state.recordStep(deps.tenant.id, req.runId, stepRecord);
 
   const decision: Decision = {
     effect,

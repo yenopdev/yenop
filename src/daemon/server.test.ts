@@ -97,6 +97,15 @@ describe("daemon", () => {
     await new Promise((r) => setTimeout(r, 1100));
     expect(await call()).toEqual({});
   });
+  it("records the outcome events Claude Code sends after an ask", async () => {
+    const p3 = join(home, "proj3");
+    mkdirSync(p3, { recursive: true });
+    const base = { session_id: "out", cwd: p3, tool_name: "Bash", tool_input: { command: "rm -rf dist" }, tool_use_id: "toolu_out_1" };
+    expect(await daemonRequest<Record<string, unknown>>(info, "/hooks/claude-code", { ...base, hook_event_name: "PreToolUse" })).toMatchObject({ hookSpecificOutput: { permissionDecision: "ask" } });
+    expect(await daemonRequest<Record<string, unknown>>(info, "/hooks/claude-code", { ...base, hook_event_name: "PostToolUse", tool_response: "ok" })).toEqual({});
+    const lines = readFileSync(join(home, "receipts.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l) as { kind?: string; callId?: string; outcome?: string });
+    expect(lines.filter((l) => l.kind === "outcome" && l.callId === "toolu_out_1")).toEqual([expect.objectContaining({ outcome: "ran" })]);
+  });
   it("never blocks on a malformed hook body", async () => {
     const r = await daemonRequest<Record<string, unknown>>(info, "/hooks/claude-code", { nonsense: true });
     expect(r).toEqual({});

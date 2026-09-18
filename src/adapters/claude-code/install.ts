@@ -9,6 +9,8 @@ interface HookEntry {
   headers?: Record<string, string>;
   timeout?: number;
   statusMessage?: string;
+  /** Run without making the agent wait. Used for the events that only record what happened. */
+  async?: boolean;
 }
 interface HookGroup {
   matcher?: string;
@@ -67,6 +69,10 @@ export function installClaudeCodeHook(settingsPath: string, command: string): { 
   return installEntry(settingsPath, entry);
 }
 
+/** PreToolUse decides. The others only report what became of the call, so they run without making the agent wait. */
+export const DECISION_EVENT = "PreToolUse";
+export const REPORT_EVENTS = ["PostToolUse", "PostToolUseFailure", "PermissionDenied"];
+
 function installEntry(settingsPath: string, entry: HookEntry): { changed: boolean; path: string } {
   let settings: Settings = {};
   if (existsSync(settingsPath)) {
@@ -75,16 +81,23 @@ function installEntry(settingsPath: string, entry: HookEntry): { changed: boolea
     mkdirSync(join(settingsPath, ".."), { recursive: true });
   }
   settings.hooks ??= {};
-  const groups = (settings.hooks["PreToolUse"] ??= []);
-  const existing = groups.find((g) => g.hooks.some(isOurs));
-  if (existing) {
-    const same = existing.matcher === "*" && existing.hooks.length === 1 && JSON.stringify(existing.hooks[0]) === JSON.stringify(entry);
-    if (same) return { changed: false, path: settingsPath };
-    existing.matcher = "*";
-    existing.hooks = [entry];
-  } else {
-    groups.push({ matcher: "*", hooks: [entry] });
-  }
-  writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n", "utf8");
-  return { changed: true, path: settingsPath };
+  let changed = false;
+  const put = (event: string, e: HookEntry) => {
+    const groups = (settings.hooks![event] ??= []);
+    const existing = groups.find((g) => g.hooks.some(isOurs));
+    if (existing) {
+      const same = existing.matcher === "*" && existing.hooks.length === 1 && JSON.stringify(existing.hooks[0]) === JSON.stringify(e);
+      if (same) return;
+      existing.matcher = "*";
+      existing.hooks = [e];
+    } else {
+      groups.push({ matcher: "*", hooks: [e] });
+    }
+    changed = true;
+  };
+  put(DECISION_EVENT, entry);
+  const { statusMessage: _quiet, ...report } = entry;
+  for (const ev of REPORT_EVENTS) put(ev, { ...report, async: true });
+  if (changed) writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n", "utf8");
+  return { changed, path: settingsPath };
 }

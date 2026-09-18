@@ -4,8 +4,8 @@ import { loadConfig, ensureHome, type YenopConfig } from "./config.js";
 import { loadPolicies } from "./policy.js";
 import { SqliteRunState, MemoryRunState } from "./state.js";
 import { JsonlReceipts, NullReceipts } from "./receipts.js";
-import { decide, type EngineDeps } from "./engine.js";
-import type { Decision, DecisionRequest, PolicyBundle, ReceiptSink, RunStateStore } from "./types.js";
+import { decide, recordOutcome, type EngineDeps } from "./engine.js";
+import type { Decision, DecisionRequest, Outcome, OutcomeReceipt, PolicyBundle, ReceiptSink, RunStateStore } from "./types.js";
 
 export * from "./types.js";
 export { classifyTool } from "./tools.js";
@@ -19,7 +19,7 @@ export { loadSchema, validateAgainstSchema } from "./policy.js";
 export { CONFIG_VERSION, resolveTenant, localTenantId } from "./config.js";
 export { STATE_VERSION } from "./state.js";
 export { SqliteRunState, MemoryRunState } from "./state.js";
-export { JsonlReceipts, NullReceipts, readReceipts } from "./receipts.js";
+export { JsonlReceipts, NullReceipts, readReceipts, readAllReceipts, answersFor, isOutcome, summarizeCall } from "./receipts.js";
 
 /** Directory of the default policy pack shipped with the package. */
 export function builtinPoliciesDir(): string {
@@ -32,6 +32,8 @@ export interface Yenop {
   /** Set when the policies could not be loaded or do not match the vocabulary. Every decision is then a deny. */
   policyError?: string;
   decide(req: DecisionRequest): Decision;
+  /** Record what the runtime reported about a call Yenop asked about: it ran, failed, or was refused. */
+  recordOutcome(runId: string, callId: string, tool: string, outcome: Outcome, detail?: string): OutcomeReceipt | undefined;
   close(): void;
 }
 
@@ -77,6 +79,7 @@ export function openYenop(opts: OpenOptions = {}): Yenop {
     config,
     ...(policyError !== undefined ? { policyError } : {}),
     decide: (req) => decide(deps, req),
+    recordOutcome: (runId, callId, tool, outcome, detail) => recordOutcome(deps, runId, callId, tool, outcome, detail),
     close: () => {
       deps.state.close();
       deps.receipts.close();

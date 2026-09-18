@@ -18,6 +18,19 @@ export interface ClaudeCodeHookInput {
   tool_use_id?: string;
   agent_id?: string;
   agent_type?: string;
+  /** PermissionDenied only. */
+  denial_reason?: string;
+}
+
+/** Events Claude Code sends after the decision, and what each says about the call. */
+export const OUTCOME_EVENTS: Record<string, "ran" | "failed" | "denied"> = {
+  PostToolUse: "ran",
+  PostToolUseFailure: "failed",
+  PermissionDenied: "denied",
+};
+
+export function runIdOf(input: ClaudeCodeHookInput): string {
+  return `claude-code:${input.session_id}`;
 }
 
 export interface ClaudeCodeHookOutput {
@@ -30,7 +43,7 @@ export interface ClaudeCodeHookOutput {
 
 export function toDecisionRequest(input: ClaudeCodeHookInput): DecisionRequest {
   const req: DecisionRequest = {
-    runId: `claude-code:${input.session_id}`,
+    runId: runIdOf(input),
     principal: {
       runtime: "claude-code",
       agent: input.agent_type ? `subagent:${input.agent_type}` : "main",
@@ -117,6 +130,11 @@ export async function runHook(raw: string): Promise<HookRunResult> {
   const { openYenop } = await import("../../core/index.js");
   const yenop = openYenop(input.cwd !== undefined ? { cwd: input.cwd } : {});
   try {
+    const outcome = OUTCOME_EVENTS[input.hook_event_name ?? ""];
+    if (outcome) {
+      if (input.tool_use_id) yenop.recordOutcome(runIdOf(input), input.tool_use_id, input.tool_name, outcome, input.denial_reason);
+      return { stdout: "", exitCode: 0 };
+    }
     const decision = yenop.decide(toDecisionRequest(input));
     return renderHookResult(decision.effect, decision.message, yenop.config.mode);
   } finally {

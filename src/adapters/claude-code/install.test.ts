@@ -16,6 +16,12 @@ describe("claude code hook installer", () => {
     const s = JSON.parse(readFileSync(path, "utf8")) as { permissions: unknown; hooks: { PreToolUse: { matcher: string; hooks: { command: string }[] }[] } };
     expect(s.permissions).toEqual({ allow: ["Bash(npm test)"] });
     expect(s.hooks.PreToolUse).toHaveLength(2);
+    const all = JSON.parse(readFileSync(path, "utf8")) as { hooks: Record<string, { hooks: { command?: string; async?: boolean; statusMessage?: string }[] }[]> };
+    for (const ev of ["PostToolUse", "PostToolUseFailure", "PermissionDenied"]) {
+      expect(all.hooks[ev]).toHaveLength(1);
+      expect(all.hooks[ev]![0]!.hooks[0]).toMatchObject({ command: cmd, async: true });
+      expect(all.hooks[ev]![0]!.hooks[0]!.statusMessage).toBeUndefined();
+    }
     expect(s.hooks.PreToolUse.filter((g) => g.hooks[0]?.command === cmd)).toHaveLength(1);
     expect(s.hooks.PreToolUse[0]?.hooks[0]?.command).toBe("echo other");
   });
