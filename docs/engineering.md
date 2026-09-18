@@ -18,6 +18,9 @@
 - The tool name in the gateway is the bare MCP tool; `mcpToolRef` builds the `mcp` ToolRef. The server's annotations are not trusted.
 - One run per gateway process. MCP carries no cross-server session id, so run facts are per-server-session; correlating across servers needs a client-supplied run id, which MCP does not have yet.
 - Interactive approval over MCP (elicitation) is not built: `onAsk` is block (default) or allow. That is the next MCP step.
+- When the gateway refuses an ask it records the outcome itself (`denied`, detail names the gateway), because nothing downstream will report on a call that never left. Do not leave that to `answersFor` inference.
+- Proven against `@modelcontextprotocol/server-filesystem` 0.2.0 on 2026-09-19. Its 14 tool names drove the read heuristic in `src/core/tools.ts`; when adding a server, run its `tools/list` names through `classifyTool` and fix misses there, never per server.
+- Double gating: Claude Code's hook sees `mcp__server__tool` before the gateway does. Document `--on-ask allow` for that combination rather than building dedup.
 
 ## Approvals and answers
 - `explainAsk` in `src/core/engine.ts` builds the history sentence from the step history in the state store (`run_steps`, STATE_VERSION 3). Keep it one paragraph: Claude Code shows the reason as plain text.

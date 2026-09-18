@@ -68,8 +68,19 @@ describe("gating tools/call", () => {
   });
   it("records a receipt for every gated call", () => {
     gateClientMessage(ctx(), call(1, "execute_sql", { query: "DELETE FROM x" }));
-    const last = readFileSync(join(home, "receipts.jsonl"), "utf8").trim().split("\n").pop()!;
-    expect(JSON.parse(last)).toMatchObject({ tool: "execute_sql", toolKind: "mcp", effect: "ask" });
+    const lines = readFileSync(join(home, "receipts.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l));
+    expect(lines.find((l) => l.kind === "decision")).toMatchObject({ tool: "execute_sql", toolKind: "mcp", effect: "ask" });
+  });
+  it("records a definite outcome when it refuses an ask, since nothing downstream will", () => {
+    gateClientMessage(ctx(), call(7, "write_file", { path: "/x" }));
+    const lines = readFileSync(join(home, "receipts.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l));
+    const outcome = lines.find((l) => l.kind === "outcome");
+    expect(outcome).toMatchObject({ outcome: "denied", tool: "write_file", callId: "mcp:7" });
+    expect(outcome.detail).toMatch(/gateway/);
+  });
+  it("classifies the official filesystem server's tools correctly, including recursive listings", () => {
+    for (const t of ["read_text_file", "list_directory", "directory_tree", "search_files", "get_file_info"]) expect(mcpToolRef("fs", t).readOnly, t).toBe(true);
+    for (const t of ["write_file", "edit_file", "create_directory", "move_file"]) expect(mcpToolRef("fs", t).readOnly, t).toBe(false);
   });
   it("honors on-ask=allow for teams that want MCP writes through", () => {
     expect(gateClientMessage(ctx({ onAsk: "allow" }), call(1, "execute_sql", { query: "UPDATE x SET y=1" }))).toEqual({ action: "forward" });

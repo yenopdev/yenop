@@ -94,3 +94,12 @@ describe("secret patterns", () => {
     expect(matchesSecretPattern("/x/vault.txt", ["**/vault.txt"])).toBe(true);
   });
 });
+
+describe("secret patterns beyond ~/.ssh", () => {
+  it("recognizes private keys and credential stores wherever they live", () => {
+    for (const p of ["/repo/infra/keys/id_rsa", "/repo/id_ed25519", "/home/u/.git-credentials", "/repo/terraform.tfstate", "/repo/app.jks", "/home/u/.pgpass"]) expect(matchesSecretPattern(p), p).toBe(true);
+  });
+  it("still leaves public keys and examples alone", () => {
+    for (const p of ["/repo/infra/keys/id_rsa.pub", "/home/u/.ssh/id_ed25519.pub", "/repo/.env.example", "/repo/README.md"]) expect(matchesSecretPattern(p), p).toBe(false);
+  });
+});

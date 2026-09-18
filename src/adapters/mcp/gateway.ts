@@ -67,6 +67,8 @@ export function gateClientMessage(ctx: GatewayContext, line: string): GateResult
   if (d.mode === "observe" || d.effect === "allow") return { action: "forward" };
   if (d.effect === "ask" && ctx.onAsk === "allow") return { action: "forward" };
 
+  // Nothing downstream will report on this call, because it never leaves the gateway. Record the outcome now.
+  if (d.effect === "ask" && req.callId) ctx.yenop.recordOutcome(ctx.runId, req.callId, req.tool.name, "denied", "blocked at the MCP gateway: no interactive approver");
   const what = d.effect === "ask" ? "needs a person, and this MCP gateway has no interactive approver" : "was blocked";
   const text = `Yenop ${what}: ${d.message} (tool ${ctx.server}/${msg.params.name}). Adjust policy or run it yourself; receipt ${d.receiptId}.`;
   return {

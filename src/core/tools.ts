@@ -38,7 +38,9 @@ const CLAUDE_CODE_TOOLS: Record<string, { kind: ToolRef["kind"]; readOnly: boole
   Bash: { kind: "shell", readOnly: false },
 };
 
-const MCP_READ_HINT = /(^|_)(get|list|read|search|query|fetch|describe|show|find|lookup|view)(_|$)/i;
+// Words that only ever read, as whole underscore-separated parts. Checked against the official filesystem,
+// github and database servers. Anything not matched is treated as a write, which is the safe direction.
+const MCP_READ_HINT = /(^|_)(get|list|read|search|query|fetch|describe|show|find|lookup|view|tree|browse|stat|info|status|inspect|preview|exists|diff|cat|ls|grep|head|tail|count|retrieve)(_|$)/i;
 
 /** Classify a tool name into a ToolRef. Conservative: anything unknown is not read-only. */
 export function classifyTool(name: string): ToolRef {

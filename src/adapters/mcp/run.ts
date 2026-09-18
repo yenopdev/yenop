@@ -4,6 +4,7 @@
  */
 import { spawn } from "node:child_process";
 import { basename } from "node:path";
+import { userInfo } from "node:os";
 import { openYenop } from "../../core/index.js";
 import { uuidv7 } from "../../core/index.js";
 import { pumpGateway, type GatewayContext } from "./gateway.js";
@@ -79,8 +80,7 @@ export async function runMcpGateway(opts: McpOptions): Promise<number> {
 
 function safeUser(): string {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    return (require("node:os") as typeof import("node:os")).userInfo().username;
+    return userInfo().username;
   } catch {
     return "unknown";
   }

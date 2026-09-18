@@ -57,6 +57,12 @@ The Claude Code hook covers Claude Code. The MCP gateway covers every agent that
 
 Yenop launches the real server, forwards every message, and runs a decision on each `tools/call`. Allowed calls go through untouched; blocked ones never reach the server and the client gets a tool error with the reason. This is where the trusted-backend attacks land: an injected instruction telling the agent to dump a database through a Supabase server, or exfiltrate a repo through a GitHub server. The server would obey. The gateway does not. A tool server's own `readOnlyHint` annotations are treated as untrusted, so the classification is Yenop's, not the server's. `--on-ask allow` lets calls that would need a person through, for teams that want that.
 
+Verified against the official filesystem server: the handshake, a 14-tool listing, reads through, writes stopped before the server sees them, and the stream healthy afterwards.
+
+A note on scope: an MCP client can widen a server's reach. Claude Code advertises the project root to servers, and the official filesystem server honors that over its own arguments, so a server configured for one folder ends up serving the whole project. Yenop's checks are on the path being touched, not on what the server claims to cover, so reading `.env` through that server is still denied.
+
+Under Claude Code the hook already sees every MCP call and asks first, so a gateway on the same server would block what the person just approved. There, run the gateway with `--on-ask allow` and let the hook be the approver, or skip the gateway. The gateway earns its keep with clients that have no hook.
+
 ## The daemon
 
 Opening policies, the Cedar engine and the state database costs about 100 ms per call if done from scratch. Yenop keeps a small resident service on `127.0.0.1` that holds everything warm and decides in about a millisecond.
