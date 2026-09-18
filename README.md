@@ -116,4 +116,15 @@ policies/       the default policy pack
 
 Design references: OWASP AISVS control group C09, MCP spec 2026-07-28, Cedar, AuthZEN 1.0, RFC 8693.
 
+
+## License
+
+Yenop is source-available under the [Functional Source License, Version 1.1, with Apache 2.0 as the future license](LICENSE.md) (FSL-1.1-ALv2).
+
+- You may read, install, run, modify and redistribute it, including inside your company and for your customers' internal use.
+- You may not offer it, or something substantially similar built from it, as a competing commercial product or service.
+- Every release becomes available under the Apache License 2.0 two years after it is published.
+
+Organization features, such as shared approvals, central policy, cross-runtime receipts and the enterprise build, are separate commercial products. "Yenop" is a trademark; forks must use another name.
+
 https://yenop.com

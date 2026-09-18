@@ -2,7 +2,7 @@
   "name": "yenop",
   "version": "0.0.2",
   "description": "The layer between an AI agent and the systems it can touch: tool-call authorization, human approval, run budgets, receipts.",
-  "license": "UNLICENSED",
+  "license": "FSL-1.1-ALv2",
   "private": true,
   "type": "module",
   "bin": {
@@ -35,7 +35,8 @@
   "files": [
     "dist",
     "policies",
-    "README.md"
+    "README.md",
+    "LICENSE.md"
   ],
   "keywords": [
     "ai-agents",
