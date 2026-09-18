@@ -55,13 +55,15 @@ The Claude Code hook covers Claude Code. The MCP gateway covers every agent that
 } }
 ```
 
-Yenop launches the real server, forwards every message, and runs a decision on each `tools/call`. Allowed calls go through untouched; blocked ones never reach the server and the client gets a tool error with the reason. This is where the trusted-backend attacks land: an injected instruction telling the agent to dump a database through a Supabase server, or exfiltrate a repo through a GitHub server. The server would obey. The gateway does not. A tool server's own `readOnlyHint` annotations are treated as untrusted, so the classification is Yenop's, not the server's. `--on-ask allow` lets calls that would need a person through, for teams that want that.
+Yenop launches the real server, forwards every message, and runs a decision on each `tools/call`. Allowed calls go through untouched; blocked ones never reach the server and the client gets a tool error with the reason. This is where the trusted-backend attacks land: an injected instruction telling the agent to dump a database through a Supabase server, or exfiltrate a repo through a GitHub server. The server would obey. The gateway does not. A tool server's own `readOnlyHint` annotations are treated as untrusted, so the classification is Yenop's, not the server's.
+
+When a call needs a person, the gateway asks the person through the client using MCP elicitation: the client shows a small form with the reason and the run's history, and an Allow or Deny choice. The gateway speaks both protocol generations, the 2025 flow where the server sends the question and the 2026 flow where the client retries the call carrying the answer. The answer is recorded on the receipt, and so is whether the call then ran or failed. A client that cannot show forms gets `--on-ask block` (the default fallback: the call is refused with the reason) or `--on-ask allow`.
 
 Verified against the official filesystem server: the handshake, a 14-tool listing, reads through, writes stopped before the server sees them, and the stream healthy afterwards.
 
 A note on scope: an MCP client can widen a server's reach. Claude Code advertises the project root to servers, and the official filesystem server honors that over its own arguments, so a server configured for one folder ends up serving the whole project. Yenop's checks are on the path being touched, not on what the server claims to cover, so reading `.env` through that server is still denied.
 
-Under Claude Code the hook already sees every MCP call and asks first, so a gateway on the same server would block what the person just approved. There, run the gateway with `--on-ask allow` and let the hook be the approver, or skip the gateway. The gateway earns its keep with clients that have no hook.
+Under Claude Code the hook already sees every MCP call and asks first, so a gateway on the same server would ask a second time. There, run the gateway with `--on-ask allow` and let the hook be the approver, or skip the gateway. The gateway earns its keep with clients that have no hook.
 
 ## The daemon
 

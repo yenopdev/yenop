@@ -19,7 +19,9 @@ usage:
   yenop service install|uninstall|status|show
                                        keep the daemon alive under launchd (macOS) or systemd (Linux)
   yenop hook claude-code               (called by Claude Code) read a PreToolUse event on stdin, decide, respond
-  yenop mcp --server NAME -- CMD ...    sit between an MCP client and an MCP server; gate every tools/call
+  yenop mcp [--server NAME] [--on-ask elicit|block|allow] -- CMD ...
+                                       sit between an MCP client and an MCP server; gate every tools/call
+                                       and ask the person through the client when a call needs one
   yenop decide < request.json          decide one DecisionRequest from stdin, print the Decision
   yenop check                          parse and validate every policy in every layer
   yenop schema                         print the policy vocabulary and an example

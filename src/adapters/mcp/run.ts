@@ -7,13 +7,13 @@ import { basename } from "node:path";
 import { userInfo } from "node:os";
 import { openYenop } from "../../core/index.js";
 import { uuidv7 } from "../../core/index.js";
-import { pumpGateway, type GatewayContext } from "./gateway.js";
+import { pumpGateway, newGatewayState, type GatewayContext, type OnAsk } from "./gateway.js";
 
 export interface McpOptions {
   server?: string;
   command: string;
   args: string[];
-  onAsk?: "block" | "allow";
+  onAsk?: OnAsk;
   cwd?: string;
   home?: string;
 }
@@ -21,7 +21,7 @@ export interface McpOptions {
 /** Split `["--server","github","--","npx","-y","pkg"]` into options and the upstream command after `--`. */
 export function parseMcpArgs(argv: string[]): McpOptions {
   let server: string | undefined;
-  let onAsk: "block" | "allow" | undefined;
+  let onAsk: OnAsk | undefined;
   let i = 0;
   for (; i < argv.length; i++) {
     const a = argv[i];
@@ -30,7 +30,11 @@ export function parseMcpArgs(argv: string[]): McpOptions {
       break;
     }
     if (a === "--server") server = argv[++i];
-    else if (a === "--on-ask") onAsk = argv[++i] === "allow" ? "allow" : "block";
+    else if (a === "--on-ask") {
+      const v = argv[++i];
+      if (v !== "elicit" && v !== "block" && v !== "allow") throw new Error(`yenop mcp: --on-ask must be elicit, block or allow (got ${v})`);
+      onAsk = v;
+    }
     else break;
   }
   const rest = argv.slice(i);
@@ -53,7 +57,8 @@ export async function runMcpGateway(opts: McpOptions): Promise<number> {
     server: opts.server ?? "mcp",
     user: safeUser(),
     client: "mcp-client",
-    onAsk: opts.onAsk ?? "block",
+    onAsk: opts.onAsk ?? "elicit",
+    state: newGatewayState(),
   };
 
   pumpGateway(ctx, {
