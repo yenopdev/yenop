@@ -37,6 +37,7 @@ From then on, every tool call Claude Code makes in this project passes through Y
 |---|---|
 | `npm test`, reading a source file | nothing; Claude Code's normal flow applies |
 | `terraform destroy`, `DROP TABLE`, a forced push, writing outside the project, any MCP tool that writes | **ask**: Claude Code shows the exact action and waits for you |
+| running a scanner, exploitation framework, credential cracker, or a reverse shell (`nmap`, `sqlmap`, `hashcat`, `bash -i >& /dev/tcp/...`) | **ask**: dual-use, so a person signs off |
 | reading a private key or `.env`, piping a download straight into a shell, sending a credential over the network | **deny**: blocked, with the policy named |
 | a run that has been denied 20 times, or has made 1,000 calls | **deny**: the breaker halts the run |
 

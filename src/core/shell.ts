@@ -51,6 +51,8 @@ export interface ShellFacts {
   destructive: boolean;
   /** Changes Yenop's own rules, mode, daemon, or hook registration. A guard the guarded party can reconfigure is no guard. */
   controlPlane: boolean;
+  /** A scanner, exploitation framework, credential attack, or a reverse-shell pattern. Dual-use: legitimate in authorized testing. */
+  offensiveTool: boolean;
 }
 
 /** Default secret-file patterns. `**` spans directories, `*` does not. A leading `!` excludes. */
@@ -84,6 +86,39 @@ const CLOUD_CLIS = new Set(["aws", "gcloud", "az", "flyctl", "fly", "heroku", "v
 const DESTRUCTIVE_SUBCOMMAND = /(^|[-_])(delete|destroy|terminate|remove|rm|rmi|purge|prune|wipe|drop|reset|uninstall|down|teardown)([-_]|$)/i;
 const SQL_VERBS = ["DROP TABLE", "DROP DATABASE", "DROP SCHEMA", "DROP INDEX", "DELETE FROM", "TRUNCATE", "ALTER TABLE"];
 const SECRET_ENV = /(KEY|TOKEN|SECRET|PASS|PASSWORD|PASSWD|CRED|CREDENTIAL|PRIVATE|AUTH)/i;
+
+/**
+ * Offensive security tools: scanners, exploitation frameworks, credential attacks, lateral movement.
+ * Every one of these is legitimate in authorized penetration testing, so the baseline asks a person
+ * rather than refusing. A team that does this work daily disables the rule or lists the tools they expect.
+ */
+const OFFENSIVE_TOOLS = new Set([
+  // port and network scanners
+  "nmap", "masscan", "zmap", "rustscan", "unicornscan", "naabu",
+  // web scanners and content discovery
+  "nikto", "wpscan", "gobuster", "dirb", "dirbuster", "ffuf", "wfuzz", "feroxbuster", "nuclei", "dalfox", "xsstrike",
+  // exploitation frameworks
+  "msfconsole", "msfvenom", "msfdb", "sqlmap", "sqlninja", "beef", "beef-xss", "commix", "routersploit", "empire", "starkiller",
+  // credential attacks and cracking
+  "hydra", "medusa", "ncrack", "patator", "john", "hashcat", "aircrack-ng", "airodump-ng", "wifite", "hashid",
+  // active directory, lateral movement, dumping
+  "crackmapexec", "nxc", "evil-winrm", "enum4linux", "enum4linux-ng", "responder", "mimikatz", "bloodhound",
+  "bloodhound-python", "kerbrute", "certipy", "coercer",
+  // impacket, usually run as "python3 secretsdump.py ..."
+  "secretsdump.py", "psexec.py", "wmiexec.py", "smbexec.py", "atexec.py", "dcomexec.py", "getst.py",
+  "getuserspns.py", "getnpusers.py", "ntlmrelayx.py", "mssqlclient.py", "reg.py",
+]);
+
+/** A reverse or bind shell, found by pattern in the whole command. These are almost never routine. */
+function looksLikeReverseShell(command: string): boolean {
+  const c = command.toLowerCase();
+  if (/\/dev\/(tcp|udp)\//.test(c)) return true; // bash /dev/tcp redirect
+  if (/\bn(c|cat|etcat)\b[^|;&]*\s-[a-z]*[ec]/.test(c)) return true; // nc -e / -c
+  if (/\bsocat\b[\s\S]*(exec:|system:)/.test(c)) return true; // socat EXEC/SYSTEM
+  if (/\bmkfifo\b[\s\S]*\bn(c|cat|etcat)\b/.test(c)) return true; // mkfifo + nc
+  if (/\bpty\.spawn\(/.test(c) || /import\s+pty/.test(c)) return true; // python pty shell
+  return false;
+}
 const DB_CLIENTS = new Set(["psql", "pg_dump", "pg_dumpall", "mysql", "mysqldump", "mongosh", "mongo", "mongodump", "redis-cli", "sqlite3", "sqlcmd", "clickhouse-client", "bq", "snowsql"]);
 
 /** Paths that hold Yenop's own configuration, or the hook registration that puts Yenop in the loop. */
@@ -421,6 +456,7 @@ export function analyzeShell(command: string, opts: { secretPatterns?: string[];
   let download = false;
   let sensitiveRead = false;
   let controlPlane = false;
+  let offensiveTool = looksLikeReverseShell(command);
   let hostUnknown = false;
 
   // env refs and SQL from every argument, including quoted strings
@@ -443,6 +479,20 @@ export function analyzeShell(command: string, opts: { secretPatterns?: string[];
     const prog = base(argv[0]!);
     const args = argv.slice(1);
     programs.add(prog);
+    if (OFFENSIVE_TOOLS.has(prog)) {
+      offensiveTool = true;
+      ops.add(`offensive:${prog}`);
+    }
+    // impacket-style scripts run through an interpreter, e.g. "python3 secretsdump.py".
+    // Only a local .py argument counts; a name inside a URL path (github.com/nmap/nmap) does not.
+    for (const a of args) {
+      if (a.startsWith("-") || a.includes("://")) continue;
+      const b = base(a).toLowerCase();
+      if (b.endsWith(".py") && OFFENSIVE_TOOLS.has(b)) {
+        offensiveTool = true;
+        ops.add(`offensive:${b}`);
+      }
+    }
 
     // Yenop's own files: writing them (or anything that is not plain viewing), stopping the daemon, re-running init.
     for (const r of cmd.redirects) if (r.op !== "<" && r.op !== "<<<" && isControlPlanePath(expandHome(r.target, home))) controlPlane = true;
@@ -661,5 +711,6 @@ export function analyzeShell(command: string, opts: { secretPatterns?: string[];
     outbound,
     destructive,
     controlPlane,
+    offensiveTool,
   };
 }

@@ -25,6 +25,13 @@ when {
   (resource.kind == "write" && context.derived has controlPlanePath && context.derived.controlPlanePath)
 };
 
+// Offensive security tooling: scanners, exploitation frameworks, credential attacks, reverse shells.
+// Dual-use, so a person signs off rather than an outright refusal. A pentest team that runs these daily
+// disables this with "disabledPolicies": ["offensive-tooling"], or tightens it to a forbid.
+@id("offensive-tooling")
+permit (principal, action == Yenop::Action::"call", resource)
+when { context has shell && context.shell.offensiveTool };
+
 // Sequence rules. A plan split into harmless-looking steps still adds up: these look at what the
 // run has already done, not only at this call. Calls to localhost and private ranges do not count.
 

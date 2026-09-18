@@ -42,6 +42,7 @@ namespace Yenop {
     outbound: Bool,
     destructive: Bool,
     controlPlane: Bool,
+    offensiveTool: Bool,
   };
 
   // What the run has done before this call. Flags are sticky for the rest of the run.

