@@ -34,6 +34,11 @@
 - Internal hosts (loopback, RFC 1918, `.local`, `.internal`) are not external. An undeterminable host is treated as external.
 - Receipts record `flow` and `runBefore`, so an auditor can see why a sequence rule fired without replaying the run.
 
+## Service (launchd / systemd)
+- `src/daemon/service.ts` writes the unit and loads it. The unit MUST invoke node by absolute path plus the CLI's absolute path: launchd and systemd user services run with a minimal PATH, so the CLI's `#!/usr/bin/env node` shebang and a bare `yenop` both fail with exit 127. Found the hard way on 2026-09-18.
+- Prefer a stable node symlink (`/opt/homebrew/bin/node`, `/usr/local/bin/node`, `/usr/bin/node`) over `process.execPath`, which on Homebrew is a version-pinned Cellar path that breaks on a Node upgrade. After a Node major move the user re-runs `yenop service install`.
+- KeepAlive/Restart=always plus the daemon's self-exit-on-rebuild means a rebuild is picked up automatically: the daemon exits, the supervisor restarts it on the persisted port. There is a sub-second window during a rebuild where an HTTP hook call can fail open; document it, do not engineer a handoff yet.
+
 ## Daemon rules
 - The command hook's path to the daemon (`src/daemon/fast.ts`, `hook.ts`) imports only `node:net`, `node:fs`, `node:os`, `node:path`. Loading `node:http` costs 20 ms. Do not add imports there.
 - `src/cli/main.ts` loads each subcommand's modules lazily for the same reason.

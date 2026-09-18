@@ -16,6 +16,8 @@ usage:
                                        set up ~/.yenop, start the daemon, install the Claude Code hook
                                        (project scope: .claude/settings.local.json; --user: ~/.claude/settings.json)
   yenop daemon run|start|stop|status   the resident decision service on 127.0.0.1
+  yenop service install|uninstall|status|show
+                                       keep the daemon alive under launchd (macOS) or systemd (Linux)
   yenop hook claude-code               (called by Claude Code) read a PreToolUse event on stdin, decide, respond
   yenop decide < request.json          decide one DecisionRequest from stdin, print the Decision
   yenop check                          parse and validate every policy in every layer
@@ -54,6 +56,8 @@ async function main(argv: string[]): Promise<number> {
     }
     case "daemon":
       return daemonCommand(rest[0]);
+    case "service":
+      return serviceCommand(rest[0]);
     case "decide": {
       const { openYenop } = await import("../core/index.js");
       const { readStdin } = await import("../adapters/claude-code/hook.js");
@@ -149,6 +153,9 @@ async function main(argv: string[]): Promise<number> {
         const h = info ? await daemonHealthy(info) : undefined;
         if (!info || !h) process.stdout.write(`daemon:    not running (hooks decide in-process, ~100 ms; run: yenop daemon start)\n`);
         else process.stdout.write(`daemon:    pid ${h.pid} on 127.0.0.1:${info.port}, ${h.decisions} decisions, up ${Math.round(h.uptimeMs / 60000)} min${isCurrentBuild(h) ? "" : "  (older build; restarts on next call)"}\n`);
+        const { serviceState } = await import("../daemon/service.js");
+        const svc = serviceState();
+        if (svc.state !== "not-installed") process.stdout.write(`service:   ${svc.state}\n`);
         return 0;
       } finally {
         y.close();
@@ -183,6 +190,37 @@ async function main(argv: string[]): Promise<number> {
       return 0;
     default:
       return fail(`unknown command: ${cmd}\n\n${USAGE}`);
+  }
+}
+
+async function serviceCommand(sub: string | undefined): Promise<number> {
+  const { installService, uninstallService, serviceState, servicePlan } = await import("../daemon/service.js");
+  switch (sub) {
+    case "install": {
+      mkdirSync(home(), { recursive: true });
+      const r = installService(home());
+      process.stdout.write(`${r.message}\n`);
+      const { ensureDaemon } = await import("../daemon/client.js");
+      const info = await ensureDaemon(home(), { start: true, waitMs: 6000 });
+      process.stdout.write(info ? `daemon answering on 127.0.0.1:${info.port}\n` : `note: the daemon has not answered yet; check ${join(home(), "daemon.log")}\n`);
+      process.stdout.write(`the http hook is now safe to use as the default: yenop init --hook http\n`);
+      return 0;
+    }
+    case "uninstall":
+      process.stdout.write(`${uninstallService().message}\n`);
+      return 0;
+    case "show": {
+      process.stdout.write(servicePlan(home()).unit || "(no service on this platform)\n");
+      return 0;
+    }
+    case "status":
+    case undefined: {
+      const s = serviceState();
+      process.stdout.write(`service: ${s.state}  (${s.detail})\n`);
+      return s.state === "running" ? 0 : 1;
+    }
+    default:
+      return fail(`unknown service command: ${sub}`);
   }
 }
 
@@ -289,6 +327,11 @@ async function init(rest: string[]): Promise<number> {
     const settingsPath = values.user ? join(homedir(), ".claude", "settings.json") : join(process.cwd(), ".claude", "settings.local.json");
     if (values.hook === "http") {
       if (!daemon) return fail("the http hook needs the daemon; start it with: yenop daemon start");
+      const { serviceState } = await import("../daemon/service.js");
+      const svc = serviceState();
+      if (svc.state !== "running") {
+        process.stdout.write(`warning: the http hook fails open if the daemon is down, and nothing is supervising it.\n         run "yenop service install" first, or use the default command hook.\n`);
+      }
       const r = installClaudeCodeHttpHook(settingsPath, daemon.port, daemon.token);
       process.stdout.write(`${r.changed ? "installed" : "already installed"} Claude Code http hook in ${r.path}\n`);
     } else {

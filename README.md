@@ -55,9 +55,14 @@ Opening policies, the Cedar engine and the state database costs about 100 ms per
 | Command hook, forwards to the daemon over a raw socket | ~45 ms, almost all of it Node starting | default |
 | Command hook, no daemon running | ~120 ms, then it starts a daemon for next time | fallback |
 
-`yenop daemon start | stop | status` manage it; `yenop init` starts it. It serves every project on the machine, reloads a project within a second of any policy or config change, keeps its port and token across restarts (`~/.yenop/daemon.key`, mode 600), and retires itself when Yenop is rebuilt or upgraded so old code never keeps answering. Requests need the token; only loopback is bound.
+`yenop daemon start | stop | status` manage it; `yenop init` starts it. `yenop service install` hands it to the operating system's own supervisor (a launchd agent on macOS, a systemd user service on Linux), which starts it at login and restarts it if it exits. Do that before making the HTTP hook the default, since only a supervised daemon is guaranteed to be up. It serves every project on the machine, reloads a project within a second of any policy or config change, keeps its port and token across restarts (`~/.yenop/daemon.key`, mode 600), and retires itself when Yenop is rebuilt or upgraded so old code never keeps answering. Requests need the token; only loopback is bound.
 
-The command hook is the default because it cannot fail open: if the daemon is down, it decides in-process. The HTTP hook is faster but depends on the daemon being up, since Claude Code treats an unreachable hook as "no opinion". Use it with a supervised daemon.
+The command hook is the default because it cannot fail open: if the daemon is down, it decides in-process. The HTTP hook is faster but depends on the daemon being up, since Claude Code treats an unreachable hook as "no opinion". The safe way to use it:
+
+```sh
+yenop service install     # launchd or systemd keeps the daemon alive
+yenop init --hook http    # warns if the daemon is not supervised
+```
 
 ## Two modes
 
