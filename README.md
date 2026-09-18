@@ -9,7 +9,7 @@ Yenop decides which tool calls actually execute, who approved the ones that cann
 - **Spending limit:** step and deny breakers scoped to one run, not one month.
 - **Receipt:** an append-only record of every decision and the policy that made it.
 
-Status: pre-alpha. First enforcement point: Claude Code. Next: an MCP gateway and adapters for the OpenAI Agents SDK, LangGraph and n8n. Same core, same policies, same receipts for all of them.
+Status: pre-alpha. Two enforcement points today: the Claude Code hook, and an MCP gateway that works for any MCP client (Cursor, Claude Desktop, custom agents). Next: adapters for the OpenAI Agents SDK, LangGraph and n8n. Same core, same policies, same receipts for all of them.
 
 ## Install
 
@@ -44,6 +44,18 @@ From then on, every tool call Claude Code makes in this project passes through Y
 Receipts: `node dist/cli/main.js receipts --last 20`. Raw file: `~/.yenop/receipts.jsonl`.
 
 Yenop only ever tightens. It never grants something Claude Code would have asked about.
+
+## Any MCP agent: the gateway
+
+The Claude Code hook covers Claude Code. The MCP gateway covers every agent that speaks MCP. Point the client at Yenop instead of at the tool server:
+
+```json
+{ "mcpServers": {
+  "supabase": { "command": "yenop", "args": ["mcp", "--server", "supabase", "--", "npx", "-y", "@supabase/mcp-server"] }
+} }
+```
+
+Yenop launches the real server, forwards every message, and runs a decision on each `tools/call`. Allowed calls go through untouched; blocked ones never reach the server and the client gets a tool error with the reason. This is where the trusted-backend attacks land: an injected instruction telling the agent to dump a database through a Supabase server, or exfiltrate a repo through a GitHub server. The server would obey. The gateway does not. A tool server's own `readOnlyHint` annotations are treated as untrusted, so the classification is Yenop's, not the server's. `--on-ask allow` lets calls that would need a person through, for teams that want that.
 
 ## The daemon
 

@@ -12,6 +12,13 @@
 - Policies are layered: baseline (shipped, in `policies/`), home (`~/.yenop/policies`), project (`<repo>/.yenop/policies`), plus `disabledPolicies` in config. Init never copies the baseline; users never edit shipped files.
 - Every policy has an `@id`. Evaluation errors fail closed. The Claude Code adapter only tightens: it prints nothing on allow.
 
+## MCP gateway
+- `src/adapters/mcp/gateway.ts` is the transport-agnostic core (`gateClientMessage`, `pumpGateway`); `run.ts` wires stdio to a spawned server. stdio is newline-delimited JSON-RPC, one message per line. Only `tools/call` is gated; every other message passes.
+- A blocked call is answered to the client as a tool error (`isError: true`) and never written to the server's stdin. This is the security invariant: test it stays true.
+- The tool name in the gateway is the bare MCP tool; `mcpToolRef` builds the `mcp` ToolRef. The server's annotations are not trusted.
+- One run per gateway process. MCP carries no cross-server session id, so run facts are per-server-session; correlating across servers needs a client-supplied run id, which MCP does not have yet.
+- Interactive approval over MCP (elicitation) is not built: `onAsk` is block (default) or allow. That is the next MCP step.
+
 ## Approvals and answers
 - `explainAsk` in `src/core/engine.ts` builds the history sentence from the step history in the state store (`run_steps`, STATE_VERSION 3). Keep it one paragraph: Claude Code shows the reason as plain text.
 - Outcome receipts (`kind: "outcome"`) are written only for calls Yenop asked about, once per call, linked by `decisionId`. Decision receipts carry `kind: "decision"`; lines without `kind` are older decisions.

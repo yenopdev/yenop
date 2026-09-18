@@ -19,6 +19,7 @@ usage:
   yenop service install|uninstall|status|show
                                        keep the daemon alive under launchd (macOS) or systemd (Linux)
   yenop hook claude-code               (called by Claude Code) read a PreToolUse event on stdin, decide, respond
+  yenop mcp --server NAME -- CMD ...    sit between an MCP client and an MCP server; gate every tools/call
   yenop decide < request.json          decide one DecisionRequest from stdin, print the Decision
   yenop check                          parse and validate every policy in every layer
   yenop schema                         print the policy vocabulary and an example
@@ -53,6 +54,12 @@ async function main(argv: string[]): Promise<number> {
         process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: reason } }) + "\n");
         return 2;
       }
+    }
+    case "mcp": {
+      const { parseMcpArgs, runMcpGateway } = await import("../adapters/mcp/run.js");
+      const opts = parseMcpArgs(rest);
+      opts.cwd = process.cwd();
+      return runMcpGateway(opts);
     }
     case "daemon":
       return daemonCommand(rest[0]);
@@ -444,8 +451,9 @@ function summarizeArgs(args: unknown): string {
 
 main(process.argv.slice(2)).then(
   (code) => {
-    if (code !== 0 || process.argv[2] !== "daemon") process.exitCode = code;
-    if (process.argv[2] !== "daemon" || process.argv[3] !== "run") process.exit(code);
+    const longRunning = (process.argv[2] === "daemon" && process.argv[3] === "run") || process.argv[2] === "mcp";
+    if (!longRunning) process.exit(code);
+    process.exitCode = code;
   },
   (err: unknown) => {
     process.stderr.write(`yenop: ${(err as Error).message}\n`);
