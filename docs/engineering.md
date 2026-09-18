@@ -12,6 +12,13 @@
 - Policies are layered: baseline (shipped, in `policies/`), home (`~/.yenop/policies`), project (`<repo>/.yenop/policies`), plus `disabledPolicies` in config. Init never copies the baseline; users never edit shipped files.
 - Every policy has an `@id`. Evaluation errors fail closed. The Claude Code adapter only tightens: it prints nothing on allow.
 
+## Daemon rules
+- The command hook's path to the daemon (`src/daemon/fast.ts`, `hook.ts`) imports only `node:net`, `node:fs`, `node:os`, `node:path`. Loading `node:http` costs 20 ms. Do not add imports there.
+- `src/cli/main.ts` loads each subcommand's modules lazily for the same reason.
+- `/health` reports the build the daemon booted from, never a fresh stat. The daemon exits when its own file changes on disk.
+- Port and token persist in `~/.yenop/daemon.key`. Never regenerate them on restart; HTTP hooks depend on them.
+- Any hook path must fail toward "Claude Code's own flow applies", never toward an accidental block, and never toward a silent allow of something Yenop would have denied when Yenop is reachable.
+
 ## Running Yenop on this repository
 - The tracked `.claude/settings.json` runs the Yenop hook in observe mode (`.yenop/config.json`): every tool call is decided and recorded, nothing is blocked. `yenop status` shows the active mode.
 - To test enforcement, never flip this repo to enforce. Run `yenop playground` and open `~/yenop-playground`.

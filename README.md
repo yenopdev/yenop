@@ -44,6 +44,20 @@ Receipts: `node dist/cli/main.js receipts --last 20`. Raw file: `~/.yenop/receip
 
 Yenop only ever tightens. It never grants something Claude Code would have asked about.
 
+## The daemon
+
+Opening policies, the Cedar engine and the state database costs about 100 ms per call if done from scratch. Yenop keeps a small resident service on `127.0.0.1` that holds everything warm and decides in about a millisecond.
+
+| Path | Round trip | When |
+|---|---|---|
+| HTTP hook, Claude Code posts straight to the daemon | ~1 ms | `yenop init --hook http` |
+| Command hook, forwards to the daemon over a raw socket | ~45 ms, almost all of it Node starting | default |
+| Command hook, no daemon running | ~120 ms, then it starts a daemon for next time | fallback |
+
+`yenop daemon start | stop | status` manage it; `yenop init` starts it. It serves every project on the machine, reloads a project within a second of any policy or config change, keeps its port and token across restarts (`~/.yenop/daemon.key`, mode 600), and retires itself when Yenop is rebuilt or upgraded so old code never keeps answering. Requests need the token; only loopback is bound.
+
+The command hook is the default because it cannot fail open: if the daemon is down, it decides in-process. The HTTP hook is faster but depends on the daemon being up, since Claude Code treats an unreachable hook as "no opinion". Use it with a supervised daemon.
+
 ## Two modes
 
 | Mode | What happens |
@@ -89,6 +103,7 @@ A newer file than the running Yenop understands is an error, never a silent misr
 ```
 src/core/       decision engine, Cedar evaluation, run state (SQLite), receipts (JSONL)
 src/adapters/   one thin adapter per runtime; claude-code/ is the first
+src/daemon/     the resident decision service, its client, and the raw-socket fast path
 src/cli/        the yenop command
 policies/       the default policy pack
 ```

@@ -24,7 +24,7 @@ describe("claude code hook installer", () => {
     const path = join(dir, "settings.local.json");
     writeFileSync(path, JSON.stringify({ hooks: { PreToolUse: [{ matcher: "*", hooks: [{ type: "command", command: "node /old/main.js hook claude-code" }] }] } }));
     expect(installClaudeCodeHook(path, "node /new/main.js hook claude-code").changed).toBe(true);
-    const s = JSON.parse(readFileSync(path, "utf8")) as { hooks: { PreToolUse: { hooks: { command: string }[] }[] } };
+    const s = JSON.parse(readFileSync(path, "utf8")) as { hooks: { PreToolUse: { hooks: { command?: string }[] }[] } };
     expect(s.hooks.PreToolUse).toHaveLength(1);
     expect(s.hooks.PreToolUse[0]?.hooks[0]?.command).toBe("node /new/main.js hook claude-code");
   });

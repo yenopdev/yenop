@@ -3,8 +3,10 @@
  * stdin: the hook JSON Claude Code sends. stdout: a hook decision, or nothing to defer to Claude Code's own flow.
  * Yenop only ever tightens: on allow it prints nothing, on ask it asks, on deny it blocks (exit 2 + JSON reason).
  */
-import { classifyTool, openYenop, type DecisionRequest } from "../../core/index.js";
-import { userInfo } from "node:os";
+import { classifyTool } from "../../core/tools.js";
+import type { DecisionRequest } from "../../core/types.js";
+import { userInfo, homedir } from "node:os";
+import { join } from "node:path";
 
 export interface ClaudeCodeHookInput {
   session_id: string;
@@ -56,19 +58,37 @@ export interface HookRunResult {
   exitCode: number;
 }
 
-/** Pure mapping from a Yenop decision to what Claude Code should see. */
-export function renderHookResult(effect: "allow" | "deny" | "ask", message: string): HookRunResult {
-  if (effect === "allow") return { stdout: "", exitCode: 0 };
-  const out: ClaudeCodeHookOutput = {
+/**
+ * The JSON Claude Code should receive, or null when Yenop has nothing to say
+ * (allow, or observe mode). Shared by the command hook and the daemon's HTTP hook.
+ */
+export function hookDecisionBody(effect: "allow" | "deny" | "ask", message: string, mode: "enforce" | "observe"): ClaudeCodeHookOutput | null {
+  if (mode === "observe" || effect === "allow") return null;
+  return {
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
       permissionDecision: effect,
       permissionDecisionReason: `Yenop: ${message}`,
     },
   };
-  return { stdout: JSON.stringify(out), exitCode: effect === "deny" ? 2 : 0 };
 }
 
+/** Command-hook rendering: nothing on allow, JSON on ask, JSON plus exit 2 on deny. */
+export function renderHookResult(effect: "allow" | "deny" | "ask", message: string, mode: "enforce" | "observe" = "enforce"): HookRunResult {
+  const body = hookDecisionBody(effect, message, mode);
+  if (!body) return { stdout: "", exitCode: 0 };
+  return { stdout: JSON.stringify(body), exitCode: effect === "deny" ? 2 : 0 };
+}
+
+function renderFromBody(body: ClaudeCodeHookOutput | Record<string, never>): HookRunResult {
+  if (!("hookSpecificOutput" in body)) return { stdout: "", exitCode: 0 };
+  return { stdout: JSON.stringify(body), exitCode: body.hookSpecificOutput.permissionDecision === "deny" ? 2 : 0 };
+}
+
+/**
+ * Command hook entry point. Fast path: forward to the resident daemon (~1 ms plus Node startup).
+ * Fallback: decide in this process, then start a daemon for next time.
+ */
 export async function runHook(raw: string): Promise<HookRunResult> {
   let input: ClaudeCodeHookInput;
   try {
@@ -78,14 +98,37 @@ export async function runHook(raw: string): Promise<HookRunResult> {
     return { stdout: "", exitCode: 0 };
   }
   if (!input.tool_name || !input.session_id) return { stdout: "", exitCode: 0 };
+
+  const home = process.env["YENOP_HOME"] ?? join(homedir(), ".yenop");
+  const useDaemon = process.env["YENOP_NO_DAEMON"] !== "1";
+  if (useDaemon) {
+    const { readDaemonInfoFast, rawPost } = await import("../../daemon/fast.js");
+    const info = readDaemonInfoFast(home);
+    if (info) {
+      try {
+        const r = await rawPost(info, "/hooks/claude-code", raw, 1500);
+        if (r.status === 200) return renderFromBody(JSON.parse(r.body) as ClaudeCodeHookOutput | Record<string, never>);
+      } catch {
+        /* daemon not reachable: fall through and decide here */
+      }
+    }
+  }
+
+  const { openYenop } = await import("../../core/index.js");
   const yenop = openYenop(input.cwd !== undefined ? { cwd: input.cwd } : {});
   try {
     const decision = yenop.decide(toDecisionRequest(input));
-    // Observe mode: the decision and receipt exist, but the runtime is never told.
-    if (yenop.config.mode === "observe") return { stdout: "", exitCode: 0 };
-    return renderHookResult(decision.effect, decision.message);
+    return renderHookResult(decision.effect, decision.message, yenop.config.mode);
   } finally {
     yenop.close();
+    if (useDaemon) {
+      const { startDaemonDetached } = await import("../../daemon/client.js");
+      try {
+        startDaemonDetached(home);
+      } catch {
+        /* next call will try again */
+      }
+    }
   }
 }
 

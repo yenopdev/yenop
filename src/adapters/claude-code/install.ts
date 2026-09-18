@@ -3,8 +3,10 @@ import { join } from "node:path";
 import { execFileSync } from "node:child_process";
 
 interface HookEntry {
-  type: "command";
-  command: string;
+  type: "command" | "http";
+  command?: string;
+  url?: string;
+  headers?: Record<string, string>;
   timeout?: number;
   statusMessage?: string;
 }
@@ -40,7 +42,32 @@ export function hookCommandFor(cliPath: string): string {
  * Project scope uses .claude/settings.local.json so the machine-specific command path is never committed.
  * Idempotent: an existing Yenop entry is replaced, other hooks are left alone.
  */
+function isOurs(h: HookEntry): boolean {
+  if (h.type === "http") return (h.url ?? "").includes("/hooks/claude-code");
+  return (h.command ?? "").trim().endsWith(YENOP_HOOK_MARKER);
+}
+
+/**
+ * Install the HTTP form of the hook: Claude Code posts straight to the daemon, no process spawn.
+ * The token lives in the settings file, which is why this form belongs in settings.local.json or the user file.
+ */
+export function installClaudeCodeHttpHook(settingsPath: string, port: number, token: string): { changed: boolean; path: string } {
+  const entry: HookEntry = {
+    type: "http",
+    url: `http://127.0.0.1:${port}/hooks/claude-code`,
+    headers: { Authorization: `Bearer ${token}` },
+    timeout: 10,
+    statusMessage: "Yenop is checking this action",
+  };
+  return installEntry(settingsPath, entry);
+}
+
 export function installClaudeCodeHook(settingsPath: string, command: string): { changed: boolean; path: string } {
+  const entry: HookEntry = { type: "command", command, timeout: 15, statusMessage: "Yenop is checking this action" };
+  return installEntry(settingsPath, entry);
+}
+
+function installEntry(settingsPath: string, entry: HookEntry): { changed: boolean; path: string } {
   let settings: Settings = {};
   if (existsSync(settingsPath)) {
     settings = JSON.parse(readFileSync(settingsPath, "utf8")) as Settings;
@@ -49,10 +76,9 @@ export function installClaudeCodeHook(settingsPath: string, command: string): { 
   }
   settings.hooks ??= {};
   const groups = (settings.hooks["PreToolUse"] ??= []);
-  const entry: HookEntry = { type: "command", command, timeout: 15, statusMessage: "Yenop is checking this action" };
-  const existing = groups.find((g) => g.hooks.some((h) => h.command.trim().endsWith(YENOP_HOOK_MARKER)));
+  const existing = groups.find((g) => g.hooks.some(isOurs));
   if (existing) {
-    const same = existing.matcher === "*" && existing.hooks.length === 1 && existing.hooks[0]?.command === command;
+    const same = existing.matcher === "*" && existing.hooks.length === 1 && JSON.stringify(existing.hooks[0]) === JSON.stringify(entry);
     if (same) return { changed: false, path: settingsPath };
     existing.matcher = "*";
     existing.hooks = [entry];
