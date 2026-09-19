@@ -24,3 +24,7 @@ target/
 .vscode/settings.json
 .idea/
 
+
+# built artifacts
+yenop-offline-*.tgz
+yenop-*.tgz

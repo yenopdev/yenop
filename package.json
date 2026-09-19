@@ -17,7 +17,8 @@
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "prepublishOnly": "npm run build && npm test",
-    "prepack": "npm run build"
+    "prepack": "npm run build",
+    "pack:offline": "bash scripts/build-offline.sh"
   },
   "repository": {
     "type": "git",

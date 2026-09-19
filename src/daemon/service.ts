@@ -109,12 +109,12 @@ WantedBy=default.target
 `;
 }
 
-export function servicePlan(home = process.env["YENOP_HOME"] ?? join(homedir(), ".yenop")): ServicePlan {
+export function servicePlan(home = process.env["YENOP_HOME"] ?? join(homedir(), ".yenop"), platform: NodeJS.Platform = process.platform): ServicePlan {
   const argv = launchArgv();
-  if (process.platform === "darwin") {
+  if (platform === "darwin") {
     return { platform: "darwin", argv, home, unitPath: join(homedir(), "Library", "LaunchAgents", `${SERVICE_LABEL}.plist`), unit: darwinPlist(argv, home) };
   }
-  if (process.platform === "linux") {
+  if (platform === "linux") {
     return { platform: "linux", argv, home, unitPath: join(homedir(), ".config", "systemd", "user", "yenop.service"), unit: linuxUnit(argv, home) };
   }
   return { platform: "unsupported", argv, home, unitPath: "", unit: "" };

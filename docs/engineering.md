@@ -51,6 +51,11 @@
 - Prefer a stable node symlink (`/opt/homebrew/bin/node`, `/usr/local/bin/node`, `/usr/bin/node`) over `process.execPath`, which on Homebrew is a version-pinned Cellar path that breaks on a Node upgrade. After a Node major move the user re-runs `yenop service install`.
 - KeepAlive/Restart=always plus the daemon's self-exit-on-rebuild means a rebuild is picked up automatically: the daemon exits, the supervisor restarts it on the persisted port. There is a sub-second window during a rebuild where an HTTP hook call can fail open; document it, do not engineer a handoff yet.
 
+## On-prem and offline
+- `scripts/build-offline.sh` (`npm run pack:offline`) makes `yenop-offline-<version>.tgz`: dist, policies, and the one production dep (`@cedar-policy/cedar-wasm`) resolved on the build machine, so the target needs no registry. Verified by extracting elsewhere and running a real decision and `yenop demo` with only the bundle's `node_modules` in scope.
+- `servicePlan(home, platform)` takes an optional platform so both the launchd plist and the systemd unit are unit-tested off their native OS. Linux systemd is generated and asserted correct but a live end-to-end run on real systemd is still pending real hardware or a container; say so to customers rather than claiming it verified.
+- Windows: `servicePlan` returns `unsupported`; the hook is untested there. Documented as unsupported in `docs/on-prem.md`.
+
 ## Viewer
 - `src/viewer/server.ts` is a standalone read-only HTTP server (`yenop viewer`), on purpose not part of the daemon: it must never touch the decision hot path, and it should run without a daemon. `viewerPayload` is pure and tested; the page is one self-contained HTML string with no external scripts or fonts.
 - It binds 127.0.0.1 and rejects any request whose `Host` header is not localhost, the standard DNS-rebinding guard, so a web page cannot read the receipts by pointing a name at 127.0.0.1. No auth beyond that: the data is local and read-only.

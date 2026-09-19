@@ -2,22 +2,37 @@ import { describe, it, expect } from "vitest";
 import { servicePlan, SERVICE_LABEL } from "./service.js";
 
 describe("service plan", () => {
-  it("produces a valid-looking unit for this platform with the home baked in", () => {
-    const p = servicePlan("/tmp/yenop-home");
-    if (p.platform === "darwin") {
-      expect(p.unitPath).toMatch(/Library\/LaunchAgents\/com\.yenop\.daemon\.plist$/);
-      expect(p.unit).toContain(`<string>${SERVICE_LABEL}</string>`);
-      expect(p.unit).toContain("<key>YENOP_HOME</key>");
-      expect(p.unit).toContain("/tmp/yenop-home");
-      expect(p.unit).toContain("<key>KeepAlive</key>");
-      expect(p.unit).toMatch(/<string>[^<]*daemon<\/string>\s*<string>run<\/string>/);
-    } else if (p.platform === "linux") {
-      expect(p.unitPath).toMatch(/systemd\/user\/yenop\.service$/);
-      expect(p.unit).toContain("Restart=always");
-      expect(p.unit).toContain("Environment=YENOP_HOME=/tmp/yenop-home");
-      expect(p.unit).toMatch(/ExecStart=.*daemon run/);
-    }
-    expect(p.argv[p.argv.length - 2]).toBe("daemon");
-    expect(p.argv[p.argv.length - 1]).toBe("run");
+  it("builds a launchd plist that invokes node by absolute path and bakes in home and PATH", () => {
+    const p = servicePlan("/tmp/yenop-home", "darwin");
+    expect(p.platform).toBe("darwin");
+    expect(p.unitPath).toMatch(/Library\/LaunchAgents\/com\.yenop\.daemon\.plist$/);
+    expect(p.unit).toContain(`<string>${SERVICE_LABEL}</string>`);
+    expect(p.unit).toContain("<key>YENOP_HOME</key>");
+    expect(p.unit).toContain("/tmp/yenop-home");
+    expect(p.unit).toContain("<key>KeepAlive</key>");
+    expect(p.unit).toContain("<key>PATH</key>"); // launchd's minimal PATH is widened to include node's dir
+    expect(p.unit).toMatch(/<string>[^<]*node[^<]*<\/string>/); // absolute node, not a bare "yenop"
+    expect(p.unit).toMatch(/<string>daemon<\/string>\s*<string>run<\/string>/);
+  });
+  it("builds a systemd user unit with an absolute ExecStart, home, PATH, and restart", () => {
+    const p = servicePlan("/var/lib/yenop", "linux");
+    expect(p.platform).toBe("linux");
+    expect(p.unitPath).toMatch(/systemd\/user\/yenop\.service$/);
+    expect(p.unit).toMatch(/^\[Unit\]/m);
+    expect(p.unit).toMatch(/ExecStart=\/.*node.* .*daemon run/); // absolute node path, ends in daemon run
+    expect(p.unit).toContain("Environment=YENOP_HOME=/var/lib/yenop");
+    expect(p.unit).toMatch(/Environment=PATH=\/.*:\/usr\/bin:\/bin/);
+    expect(p.unit).toContain("Restart=always");
+    expect(p.unit).toContain("WantedBy=default.target");
+  });
+  it("reports unsupported for Windows with an empty unit", () => {
+    const p = servicePlan("/x", "win32");
+    expect(p.platform).toBe("unsupported");
+    expect(p.unit).toBe("");
+    expect(p.unitPath).toBe("");
+  });
+  it("the argv always ends in daemon run", () => {
+    const p = servicePlan("/x");
+    expect(p.argv.slice(-2)).toEqual(["daemon", "run"]);
   });
 });
