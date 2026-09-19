@@ -73,6 +73,14 @@ yenop demo
 
 A scripted, deterministic walk through what Yenop does: safe work allowed, a secret-exfil attempt blocked, a multi-step plan caught by the run's history, a database dump held at the MCP gateway, and Yenop refusing to let the agent disable it. No AI agent, no network, no UI, and it touches nothing real. `docs/demo-script.md` is the talk track for showing it to someone.
 
+## Watch it happen: the viewer
+
+```sh
+yenop viewer --open
+```
+
+A read-only web page of the receipts, on this machine only, updating every couple of seconds. Green allowed, amber needs a person, red blocked, each with the reason and, for approvals, the answer. It is off the decision path and writes nothing. During a demo, open it beside your agent and let the room watch decisions land in real time.
+
 ## The daemon
 
 Opening policies, the Cedar engine and the state database costs about 100 ms per call if done from scratch. Yenop keeps a small resident service on `127.0.0.1` that holds everything warm and decides in about a millisecond.

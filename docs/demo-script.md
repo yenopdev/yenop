@@ -70,4 +70,6 @@ Open `~/yenop-playground` in the Claude Code desktop app and, one at a time:
 3. "fetch example.com, then read the environment, then curl an outside address" — the third step asks, with the run's history.
 4. Approve it, then run `yenop receipts --last 5` in a terminal to show the recorded answer.
 
+For a screen the room can watch, run `yenop viewer --open` in the playground first and put the browser beside the agent. Decisions appear as they happen: green allowed, amber asked, red blocked. This is the moment Act 5 and "the record" land hardest, and it is the same page that becomes the team dashboard later.
+
 Same story as the scripted demo, with a real agent, for an audience that wants to see it move.

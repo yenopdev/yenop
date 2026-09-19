@@ -51,6 +51,11 @@
 - Prefer a stable node symlink (`/opt/homebrew/bin/node`, `/usr/local/bin/node`, `/usr/bin/node`) over `process.execPath`, which on Homebrew is a version-pinned Cellar path that breaks on a Node upgrade. After a Node major move the user re-runs `yenop service install`.
 - KeepAlive/Restart=always plus the daemon's self-exit-on-rebuild means a rebuild is picked up automatically: the daemon exits, the supervisor restarts it on the persisted port. There is a sub-second window during a rebuild where an HTTP hook call can fail open; document it, do not engineer a handoff yet.
 
+## Viewer
+- `src/viewer/server.ts` is a standalone read-only HTTP server (`yenop viewer`), on purpose not part of the daemon: it must never touch the decision hot path, and it should run without a daemon. `viewerPayload` is pure and tested; the page is one self-contained HTML string with no external scripts or fonts.
+- It binds 127.0.0.1 and rejects any request whose `Host` header is not localhost, the standard DNS-rebinding guard, so a web page cannot read the receipts by pointing a name at 127.0.0.1. No auth beyond that: the data is local and read-only.
+- It is the first surface of the paid control plane. Keep it dependency-free.
+
 ## Daemon rules
 - The command hook's path to the daemon (`src/daemon/fast.ts`, `hook.ts`) imports only `node:net`, `node:fs`, `node:os`, `node:path`. Loading `node:http` costs 20 ms. Do not add imports there.
 - `src/cli/main.ts` loads each subcommand's modules lazily for the same reason.

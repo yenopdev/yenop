@@ -31,6 +31,8 @@ usage:
   yenop status                         show mode, layers, daemon, and where receipts go for the current project
   yenop playground [dir]               create a throwaway project with enforcement on, for testing in Claude Code
   yenop demo                           a scripted, no-agent walk through what Yenop does, for showing people
+  yenop viewer [--port N] [--all] [--open]
+                                       a read-only local web page of the receipts, updating live
 
 Mode: "enforce" returns decisions to the runtime; "observe" only records them.
 Set per project in <project>/.yenop/config.json, per machine in ~/.yenop/config.json, or with YENOP_MODE.
@@ -179,6 +181,30 @@ async function main(argv: string[]): Promise<number> {
     }
     case "init":
       return init(rest);
+    case "viewer": {
+      const { values } = parseArgs({ args: rest, options: { port: { type: "string" }, all: { type: "boolean", default: false }, open: { type: "boolean", default: false } } });
+      const { openYenop } = await import("../core/index.js");
+      const { startViewer } = await import("../viewer/server.js");
+      const y = openYenop({ cwd: process.cwd(), dryRun: true });
+      const vopts: { port?: number; all?: boolean } = { all: values.all };
+      if (values.port) vopts.port = Number(values.port);
+      const h = await startViewer(y.config, vopts);
+      process.stdout.write(`yenop receipts viewer at ${h.url}\n(${values.all ? "every project" : `tenant "${y.config.tenant.name}"`}; read-only; this machine only; Ctrl-C to stop)\n`);
+      if (values.open) {
+        const opener = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
+        try {
+          const { spawn } = await import("node:child_process");
+          spawn(opener, [h.url], { stdio: "ignore", detached: true }).unref();
+        } catch {
+          /* the URL is printed; opening is a convenience */
+        }
+      }
+      const stop = () => void h.close().then(() => y.close()).then(() => process.exit(0));
+      process.on("SIGINT", stop);
+      process.on("SIGTERM", stop);
+      await new Promise(() => {});
+      return 0;
+    }
     case "demo": {
       const { runDemo } = await import("./demo.js");
       const opts: { color?: boolean } = {};
@@ -461,7 +487,7 @@ function summarizeArgs(args: unknown): string {
 
 main(process.argv.slice(2)).then(
   (code) => {
-    const longRunning = (process.argv[2] === "daemon" && process.argv[3] === "run") || process.argv[2] === "mcp";
+    const longRunning = (process.argv[2] === "daemon" && process.argv[3] === "run") || process.argv[2] === "mcp" || process.argv[2] === "viewer";
     if (!longRunning) process.exit(code);
     process.exitCode = code;
   },
