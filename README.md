@@ -65,6 +65,14 @@ A note on scope: an MCP client can widen a server's reach. Claude Code advertise
 
 Under Claude Code the hook already sees every MCP call and asks first, so a gateway on the same server would ask a second time. There, run the gateway with `--on-ask allow` and let the hook be the approver, or skip the gateway. The gateway earns its keep with clients that have no hook.
 
+## See it in one command
+
+```sh
+yenop demo
+```
+
+A scripted, deterministic walk through what Yenop does: safe work allowed, a secret-exfil attempt blocked, a multi-step plan caught by the run's history, a database dump held at the MCP gateway, and Yenop refusing to let the agent disable it. No AI agent, no network, no UI, and it touches nothing real. `docs/demo-script.md` is the talk track for showing it to someone.
+
 ## The daemon
 
 Opening policies, the Cedar engine and the state database costs about 100 ms per call if done from scratch. Yenop keeps a small resident service on `127.0.0.1` that holds everything warm and decides in about a millisecond.

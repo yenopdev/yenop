@@ -30,6 +30,7 @@ usage:
   yenop explain <tool> [json-args]     dry-run a tool call against the policies without recording a real step
   yenop status                         show mode, layers, daemon, and where receipts go for the current project
   yenop playground [dir]               create a throwaway project with enforcement on, for testing in Claude Code
+  yenop demo                           a scripted, no-agent walk through what Yenop does, for showing people
 
 Mode: "enforce" returns decisions to the runtime; "observe" only records them.
 Set per project in <project>/.yenop/config.json, per machine in ~/.yenop/config.json, or with YENOP_MODE.
@@ -178,6 +179,13 @@ async function main(argv: string[]): Promise<number> {
     }
     case "init":
       return init(rest);
+    case "demo": {
+      const { runDemo } = await import("./demo.js");
+      const opts: { color?: boolean } = {};
+      if (rest.includes("--no-color")) opts.color = false;
+      if (rest.includes("--color")) opts.color = true;
+      return runDemo(opts);
+    }
     case "playground": {
       const dir = resolve(rest[0] ?? join(homedir(), "yenop-playground"));
       const { hookCommandFor } = await import("../adapters/claude-code/install.js");

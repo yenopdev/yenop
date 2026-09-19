@@ -516,6 +516,14 @@ export function analyzeShell(command: string, opts: { secretPatterns?: string[];
       if ((r.op === ">" || r.op === ">|" || r.op === "&>") && /^\/dev\/(sd|disk|nvme|hd|mmcblk)/.test(r.target)) destructive = true;
     }
     for (const a of args) if (isPathLike(a) && !a.startsWith("-")) paths.add(expandHome(a, home));
+    // file references inside arguments: curl's `@file`, `field=@file`, `--data-binary @file`, `-T file`, `--upload-file file`
+    for (const a of args) {
+      const m = /(?:^|=)@([^@\s;]+)$/.exec(a);
+      if (m && m[1] !== "-") paths.add(expandHome(m[1]!, home));
+    }
+    for (let i = 0; i < args.length - 1; i++) {
+      if (args[i] === "-T" || args[i] === "--upload-file") paths.add(expandHome(args[i + 1]!, home));
+    }
 
     // an interpreter fed by a pipe with no script file: `curl ... | sh`, `... | python3 -`
     if (INTERPRETERS.has(prog) && cmd.piped) {
