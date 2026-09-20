@@ -112,7 +112,7 @@ export async function runHookWith(t: HookTranslator, raw: string): Promise<HookR
 
 /** Apply one parsed event to an open Yenop and produce the runtime's body. Shared by the daemon route. */
 export function decideEvent(
-  yenop: { decide: (r: DecisionRequest) => { effect: Effect; message: string }; recordOutcome: (runId: string, callId: string, tool: string, outcome: Outcome, detail?: string) => unknown; config: { mode: Mode } },
+  yenop: { decide: (r: DecisionRequest) => { effect: Effect; message: string }; recordOutcome: (runId: string, callId: string, tool: string, outcome: Outcome, detail?: string) => unknown; endRun: (runId: string) => void; config: { mode: Mode } },
   t: HookTranslator,
   event: HookEvent,
 ): Record<string, unknown> | null {
@@ -121,7 +121,9 @@ export function decideEvent(
       yenop.recordOutcome(event.runId, event.callId, event.tool, event.outcome, event.detail);
       return null;
     case "session-end":
-      return null; // run expiry lands with the run-state work; nothing to do yet
+      // the runtime told us the session ended: forget its run so a new session on the same id starts fresh
+      yenop.endRun(event.runId);
+      return null;
     case "ignore":
       return null;
     case "decision": {

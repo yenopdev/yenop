@@ -20,6 +20,8 @@ export interface EngineDeps {
   budgets: BudgetLimits;
   state: RunStateStore;
   receipts: ReceiptSink;
+  /** A run idle longer than this (ms) starts fresh on its next call. */
+  idleMs: number;
   now?: () => Date;
 }
 
@@ -172,6 +174,8 @@ export function recordOutcome(deps: EngineDeps, runId: string, callId: string, t
  */
 export function decide(deps: EngineDeps, req: DecisionRequest): Decision {
   const t0 = process.hrtime.bigint();
+  // A run idle past the window is treated as ended, so a crashed session's facts never taint a fresh one.
+  deps.state.expireIfIdle(deps.tenant.id, req.runId, deps.idleMs);
   if (req.callId !== undefined) {
     const seen = deps.state.recallCall(deps.tenant.id, req.runId, req.callId);
     if (seen) return { ...seen, replayed: true };

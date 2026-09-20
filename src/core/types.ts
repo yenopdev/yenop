@@ -167,6 +167,14 @@ export interface OutcomeReceipt {
 }
 
 export interface RunStateStore {
+  /**
+   * If the run has been idle longer than `idleMs`, forget its accumulated facts and history so the next call
+   * starts a fresh run. A crashed or abandoned session must not taint a later one that reuses the same id.
+   * Called once at the top of a decision. Returns true if a stale run was cleared.
+   */
+  expireIfIdle(tenant: string, runId: string, idleMs: number): boolean;
+  /** End a run now (a runtime told us the session ended). The next call on this id starts fresh. */
+  endRun(tenant: string, runId: string): void;
   /** Atomically records one call, folds its flow into the run, and returns the run's facts after it. */
   bump(tenant: string, runId: string, effect: Effect, flow?: FlowFacts): RunFacts;
   /** Read the run's facts without changing them. */

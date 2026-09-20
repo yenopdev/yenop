@@ -31,6 +31,10 @@ const toStep = (r: StepRow): StepRecord => {
 /** How long a repeated call id returns the earlier decision. Long enough for a double-fired hook, far too short to outlive a rebuild. */
 export const REPLAY_WINDOW_MS = 30_000;
 
+/** A run idle longer than this is treated as ended; the next call on its id starts fresh. Two hours: long enough
+ * for a developer to step away mid-task, short enough that a crashed session does not haunt the next one. */
+export const RUN_IDLE_MS = 2 * 60 * 60 * 1000;
+
 export const STATE_VERSION = 3;
 
 interface Row {
@@ -147,6 +151,20 @@ export class SqliteRunState implements RunStateStore {
     this.rememberStmt.run(tenant, runId, callId, JSON.stringify(decision), new Date().toISOString());
   }
 
+  expireIfIdle(tenant: string, runId: string, idleMs: number): boolean {
+    const row = this.db.prepare(`SELECT last_at FROM runs WHERE tenant = ? AND run_id = ?`).get(tenant, runId) as { last_at?: string } | undefined;
+    if (!row?.last_at) return false;
+    if (Date.now() - new Date(row.last_at).getTime() <= idleMs) return false;
+    this.endRun(tenant, runId);
+    return true;
+  }
+
+  endRun(tenant: string, runId: string): void {
+    this.db.prepare(`DELETE FROM runs WHERE tenant = ? AND run_id = ?`).run(tenant, runId);
+    this.db.prepare(`DELETE FROM run_steps WHERE tenant = ? AND run_id = ?`).run(tenant, runId);
+    this.db.prepare(`DELETE FROM calls WHERE tenant = ? AND run_id = ?`).run(tenant, runId);
+  }
+
   bump(tenant: string, runId: string, effect: Effect, flow?: FlowFacts): RunFacts {
     const now = new Date().toISOString();
     // A denied call did not happen, so it leaves no mark on the run.
@@ -209,8 +227,26 @@ export class SqliteRunState implements RunStateStore {
 /** Counters that live only for the life of the process. Used by dry runs and tests. */
 export class MemoryRunState implements RunStateStore {
   private runs = new Map<string, RunFacts>();
+  private lastAt = new Map<string, number>();
+  expireIfIdle(tenant: string, runId: string, idleMs: number): boolean {
+    const k = `${tenant}\u0000${runId}`;
+    const last = this.lastAt.get(k);
+    if (last === undefined || Date.now() - last <= idleMs) return false;
+    this.endRun(tenant, runId);
+    return true;
+  }
+  endRun(tenant: string, runId: string): void {
+    const k = `${tenant}\u0000${runId}`;
+    this.runs.delete(k);
+    this.steps.delete(k);
+    this.calls.forEach((_v, key) => {
+      if (key.startsWith(`${tenant}\u0000${runId}\u0000`)) this.calls.delete(key);
+    });
+    this.lastAt.delete(k);
+  }
   bump(tenant: string, runId: string, effect: Effect, flow?: FlowFacts): RunFacts {
     const k = `${tenant}\u0000${runId}`;
+    this.lastAt.set(k, Date.now());
     const r = this.runs.get(k) ?? { ...EMPTY };
     r.steps += 1;
     if (effect === "deny") r.denies += 1;

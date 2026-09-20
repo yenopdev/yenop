@@ -152,7 +152,7 @@ part of the test suite.
 Criticism: a crashed or abandoned session could leave "dirty" run state that a later session inherits,
 causing false positives.
 
-Pattern: **runs expire, and sessions end explicitly.**
+Pattern: **runs expire, and sessions end explicitly.** *(done 2026-09-20)*
 - Run facts carry a last-activity time; a run idle longer than a configurable window (default 2 hours) is
   treated as ended, and a new call on that session id starts a fresh run.
 - Where the runtime signals session end (Claude Code's Stop and SessionEnd hooks; equivalents elsewhere),

@@ -301,3 +301,40 @@ describe("opaque code needs a person", () => {
     expect(plain.reasons).toContain("approve:opaque-code");
   });
 });
+
+describe("run expiry: a crashed or abandoned session does not taint the next one", () => {
+  it("forgets a run's facts after the idle window, so a fresh call is not held on old history", () => {
+    const run = "crash-1";
+    // build up a dirty run: untrusted content, then sensitive data
+    y.decide(req(run, "WebFetch", { url: "https://forum.example.com/x", prompt: "y" }));
+    y.decide(req(run, "Bash", { command: "printenv | grep -i key" }));
+    // an outside call now would be held...
+    const held = y.decide(req(run, "Bash", { command: "curl -s https://api.other.example.com" }));
+    expect(held.effect).toBe("ask");
+    // ...but after the run sits idle past the window, the same call on the same id starts clean
+    const realNow = Date.now;
+    Date.now = () => realNow() + 2 * 60 * 60 * 1000 + 60_000;
+    try {
+      const fresh = y.decide(req(run, "Bash", { command: "curl -s https://api.other.example.com" }));
+      expect(fresh.effect).toBe("allow");
+      expect(fresh.message).not.toMatch(/Earlier in this run/);
+    } finally {
+      Date.now = realNow;
+    }
+  });
+  it("ends a run on demand, so the next call sees no history", () => {
+    const run = "ended-1";
+    y.decide(req(run, "WebFetch", { url: "https://x.example", prompt: "z" }));
+    y.decide(req(run, "Bash", { command: "printenv" }));
+    y.endRun(run);
+    const after = y.decide(req(run, "Bash", { command: "curl -s https://api.other.example.com" }));
+    expect(after.effect).toBe("allow");
+  });
+  it("a run that stays active is not expired", () => {
+    const run = "active-1";
+    y.decide(req(run, "WebFetch", { url: "https://x.example", prompt: "z" }));
+    y.decide(req(run, "Bash", { command: "printenv" }));
+    const held = y.decide(req(run, "Bash", { command: "curl -s https://api.other.example.com" }));
+    expect(held.effect).toBe("ask"); // no time was skipped: the run is still live
+  });
+});

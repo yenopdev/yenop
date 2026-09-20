@@ -31,6 +31,8 @@ export interface YenopConfig {
   /** enforce: decisions are returned to the runtime. observe: decisions are only recorded. */
   mode: Mode;
   budgets: BudgetLimits;
+  /** A run idle longer than this many ms starts fresh; default in state.ts. Set in config as runIdleMs. */
+  runIdleMs?: number;
   /**
    * Policy layers, evaluated together. The baseline is always present and comes from the package;
    * home and project layers add to it. Cedar semantics: any forbid wins, permits add up.
@@ -60,6 +62,7 @@ export function loadConfig(opts: { cwd?: string; home?: string; builtinPoliciesD
     sensitivePatterns: string[];
     trustedServers: string[];
     sensitiveServers: string[];
+    runIdleMs: number;
   }>;
   const readCfg = (path: string): FileCfg => {
     if (!existsSync(path)) return {};
@@ -100,6 +103,7 @@ export function loadConfig(opts: { cwd?: string; home?: string; builtinPoliciesD
     sensitiveServers: both("sensitiveServers"),
     mode,
     budgets: { ...DEFAULT_BUDGETS, ...(fileCfg.budgets ?? {}) },
+    ...(typeof fileCfg.runIdleMs === "number" ? { runIdleMs: fileCfg.runIdleMs } : {}),
     policyLayers,
     disabledPolicies,
     receiptsPath: join(home, "receipts.jsonl"),

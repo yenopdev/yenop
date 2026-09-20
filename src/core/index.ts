@@ -2,7 +2,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { loadConfig, ensureHome, type YenopConfig } from "./config.js";
 import { loadPolicies } from "./policy.js";
-import { SqliteRunState, MemoryRunState } from "./state.js";
+import { SqliteRunState, MemoryRunState, RUN_IDLE_MS } from "./state.js";
 import { JsonlReceipts, NullReceipts } from "./receipts.js";
 import { decide, recordOutcome, type EngineDeps } from "./engine.js";
 import type { Decision, DecisionRequest, Outcome, OutcomeReceipt, PolicyBundle, ReceiptSink, RunStateStore } from "./types.js";
@@ -34,6 +34,8 @@ export interface Yenop {
   decide(req: DecisionRequest): Decision;
   /** Record what the runtime reported about a call Yenop asked about: it ran, failed, or was refused. */
   recordOutcome(runId: string, callId: string, tool: string, outcome: Outcome, detail?: string): OutcomeReceipt | undefined;
+  /** End a run now, because the runtime said the session ended. The next call on this id starts fresh. */
+  endRun(runId: string): void;
   close(): void;
 }
 
@@ -62,7 +64,9 @@ export function openYenop(opts: OpenOptions = {}): Yenop {
   } catch (e) {
     policyError = (e as Error).message.replace(/^yenop: /, "");
   }
+  const idleMs = config.runIdleMs ?? RUN_IDLE_MS;
   const deps: EngineDeps = {
+    idleMs,
     tenant: config.tenant,
     mode: config.mode,
     policies,
@@ -80,6 +84,7 @@ export function openYenop(opts: OpenOptions = {}): Yenop {
     ...(policyError !== undefined ? { policyError } : {}),
     decide: (req) => decide(deps, req),
     recordOutcome: (runId, callId, tool, outcome, detail) => recordOutcome(deps, runId, callId, tool, outcome, detail),
+    endRun: (runId) => deps.state.endRun(deps.tenant.id, runId),
     close: () => {
       deps.state.close();
       deps.receipts.close();
