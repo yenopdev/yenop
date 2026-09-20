@@ -6,11 +6,11 @@ An AI agent decides what it wants to do. Yenop decides what is allowed to happen
 
 **ALLOW** &nbsp;·&nbsp; **ASK** a person &nbsp;·&nbsp; **DENY**
 
-- **One layer, every agent.** Claude Code, Cursor, Codex CLI, and any tool that speaks MCP, judged by the same policies and written to one verifiable record. No single agent vendor will ever govern its competitors; Yenop does.
-- **It governs the deed, not the words.** The decision reads the actual command and file path, not the prompt, so there is no sentence to jailbreak. And it watches the whole run, so a harmful plan split across steps that each look harmless is still caught.
-- **Local-first.** It runs next to the agent, on your machine. No cloud, no account, no telemetry. The audit trail is a plain file you own, hash-chained so tampering is detectable.
+- **One layer across the agents you run.** Claude Code, Cursor, Codex CLI, and any tool that speaks MCP, judged by the same policies and written to one verifiable record. No single agent vendor will ever govern its competitors; a layer outside all of them can.
+- **It authorizes the action, not the reasoning.** Yenop does not decide whether an agent's thinking is safe. It decides whether the action the agent is about to execute is allowed, reading the actual command and file path, so there is no sentence to jailbreak. And it watches the whole run, so a harmful plan split across steps that each look harmless is still caught.
+- **Local-first.** It runs next to the agent, on your machine. No cloud dependency, no account, and no agent data, source, prompts or secrets leaves the machine unless you choose to export the audit trail. That trail is a plain file you own, hash-chained so tampering is detectable.
 
-Status: pre-alpha, source-available. Works today with Claude Code, Cursor and Codex CLI hooks and an MCP gateway for any MCP client. Next: the Gemini CLI hook, then the OpenAI Agents SDK and LangGraph.
+Status: pre-alpha. **Source-available, not open source** (see License). Works today with Claude Code, Cursor and Codex CLI hooks and an MCP gateway for any MCP client. Next: the Gemini CLI hook, then the OpenAI Agents SDK and LangGraph.
 
 ## See it in thirty seconds
 
@@ -25,6 +25,18 @@ A scripted walk through what Yenop does, with no AI agent and nothing real touch
 Companies are giving agents real access: the shell, the repository, the database, the cloud. An agent is helpful, but it does what it is told, including by a web page or a document carrying a hidden instruction. And the newest models reason in ways you cannot read or log, so you cannot audit the thinking. You can only govern the actions. That is the one place left to put a control, and it is where Yenop sits.
 
 Yenop's claim is deliberately narrow and provable: **a model's decision is never the final authorization decision.** Whatever the agent was convinced to attempt, the deed still has to pass a deterministic rule, and a person still signs off on the irreversible ones.
+
+## Why another layer?
+
+Your agent already has permissions. Cursor has run modes. Codex has a sandbox. MCP servers describe their own tools. Cloud platforms have IAM. So why install one more thing?
+
+Because each of those controls part of the execution path, and each is owned by the party it governs. A runtime's permission system changes with its next release. A tool server's "read-only" hint is the server's word. A model's judgement is the thing being attacked. None of them is independent of the agent, and none of them is the same across the three agents your team runs on the same repository.
+
+Yenop adds an independent enforcement boundary, outside the agent, that stays the same when the runtime, the model, or the tool server changes. One policy, one record, whichever agent acted. It does not replace those controls; it is the layer that is still there when they differ, update, or are talked around.
+
+## Who this is for
+
+Developers and security-minded teams giving coding agents, MCP tools, and autonomous workflows real access: a repository, credentials, a database, infrastructure. If an agent on your machine can reach something you would not want it to touch unasked, Yenop is for you.
 
 ## Quickstart
 
@@ -77,7 +89,7 @@ Yenop turns each runtime's event into one canonical action, so the engine, the p
 
 **Cursor.** `yenop init` writes `.cursor/hooks.json`: shell and MCP calls can be allowed, asked, or denied; file reads and edits allowed or denied. Cursor cannot ask a person for a file edit, so a step that needs one is blocked with a message rather than let through. Every hook is fail-closed, so a crash or timeout blocks.
 
-**Codex CLI.** `yenop init` writes `.codex/hooks.json`. Shell commands, `apply_patch` edits and MCP calls are judged, and a patch touching several files is judged by the strictest of them. Two facts about Codex itself: it has no way to ask a person from a hook, so a step that needs one is blocked with a message; and it ignores a hook that crashes or times out. Yenop answers with the one signal Codex always honours and stays reliable, but it cannot change Codex's fail-open design. Proven against a live model that tried to route around a blocked edit through an interpreter, and was stopped.
+**Codex CLI.** `yenop init` writes `.codex/hooks.json`. Shell commands, `apply_patch` edits and MCP calls are judged, and a patch touching several files is judged by the strictest of them. Two facts about Codex itself: it has no way to ask a person from a hook, so a step that needs one is blocked with a message; and it ignores a hook that crashes or times out. Be precise about whose guarantee is whose: **Yenop's boundary is fail-closed**, a decision it cannot make is a deny; **Codex's runtime is fail-open**, it proceeds if the hook itself does not answer. Yenop answers with the one signal Codex always honours and is built to answer every time, but it cannot change Codex's design, and we say so rather than imply otherwise. Proven against a live model that tried to route around a blocked edit through an interpreter, and was stopped.
 
 **Any MCP agent: the gateway.** Point the client at Yenop instead of at the tool server:
 
@@ -118,6 +130,31 @@ yenop receipts --verify
 ```
 
 reports an unbroken chain, or names the first broken line and exits non-zero. This turns the log from "trust us" into evidence a third party can check. It is local tamper-evidence, not a signature: it catches changes to the recorded history; anchoring the head against a wholesale rewrite is the control plane's job.
+
+## What it protects against, and what it does not
+
+A security tool should say both. Yenop governs agent execution on a machine you control.
+
+**It protects against**
+
+- tool misuse after a prompt injection: an agent convinced to act still has to pass a rule
+- unauthorized destructive commands, and writes outside the project
+- reads of secret files and credential stores, however the path is spelled or reached
+- exfiltration paths: a credential over the network, a download piped into a shell, an outside call after sensitive data
+- multi-step attack chains that look harmless one call at a time
+- tool servers overreaching what they claimed to cover
+- an agent editing Yenop's own rules or hook registration to switch it off
+- runaway loops, by per-run budgets
+
+**It does not claim to protect against**
+
+- a person with root on the machine, or an attacker who already has it: they can remove Yenop like any other program
+- a compromised operating system or a compromised Yenop binary
+- vulnerabilities inside a tool that was legitimately allowed to run
+- actions taken through a path Yenop is not hooked into, such as an agent Yenop does not yet support, or a runtime that ignores a hook by design (Codex, see above)
+- a wholesale rewrite of the receipts file from scratch: the chain catches edits, deletions and reordering locally; anchoring the head against a full rewrite is the control plane's job
+
+Yenop governs agent execution. It does not govern a compromised host.
 
 ## The daemon
 
