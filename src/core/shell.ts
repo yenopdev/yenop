@@ -13,6 +13,8 @@ export interface SimpleCommand {
   /** True when this command reads its stdin from a pipe. */
   piped: boolean;
   redirects: { op: string; target: string }[];
+  /** Inner text of any subshell that appeared as a redirect target. */
+  redirectSubshells?: string[];
 }
 
 export interface ShellFacts {
@@ -168,8 +170,8 @@ const CONTROL_PLANE = [
   /(^|\/)\.gemini\/settings\.json$/,
 ];
 export function isControlPlanePath(p: string): boolean {
-  const norm = normalizePath(p);
-  return CONTROL_PLANE.some((re) => re.test(norm));
+  const readings = p.includes("\\") ? [normalizePath(p), normalizePath(p.replace(/\\(.)/g, "$1"))] : [normalizePath(p)];
+  return readings.some((norm) => CONTROL_PLANE.some((re) => re.test(norm)));
 }
 const VIEWERS = new Set(["cat", "less", "more", "head", "tail", "grep", "rg", "ls", "wc", "stat", "file", "diff", "bat", "jq", "find", "tree", "du", "cd", "test", "[", "type", "get-content", "gc", "select-string", "dir", "get-childitem"]);
 
@@ -227,14 +229,18 @@ export function globToRegExp(glob: string): RegExp {
 }
 
 export function matchesSecretPattern(path: string, patterns: string[] = DEFAULT_SECRET_PATTERNS): boolean {
-  const norm = normalizePath(path);
-  let hit = false;
-  for (const p of patterns) {
-    const negate = p.startsWith("!");
-    const re = globToRegExp(negate ? p.slice(1) : p);
-    if (re.test(norm)) hit = !negate;
-  }
-  return hit;
+  // A backslash is a separator on Windows and an escape on POSIX. `.\env` is a Windows relative path or an
+  // escaped `.env`. Judge both readings; whichever is protected wins. A false positive costs a question.
+  const readings = path.includes("\\") ? [normalizePath(path), normalizePath(path.replace(/\\(.)/g, "$1"))] : [normalizePath(path)];
+  return readings.some((norm) => {
+    let hit = false;
+    for (const p of patterns) {
+      const negate = p.startsWith("!");
+      const re = globToRegExp(negate ? p.slice(1) : p);
+      if (re.test(norm)) hit = !negate;
+    }
+    return hit;
+  });
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -293,8 +299,19 @@ export function tokenize(src: string): { tokens: Tok[]; heredoc: boolean } {
       i += 2;
       continue;
     }
-    const op = OPS.find((o) => src.startsWith(o, i));
+    // a file-descriptor prefix on a redirect (`2>`, `1>>`, `2>&1`) is part of the operator, not a word
+    let op = OPS.find((o) => src.startsWith(o, i));
+    let fdSkip = 0;
+    if (!op && /[0-9]/.test(c) && (src[i + 1] === ">" || src[i + 1] === "<") && (i === 0 || /[\s;|&()]/.test(src[i - 1]!))) {
+      const rest = src.slice(i + 1);
+      const inner = OPS.find((o) => rest.startsWith(o));
+      if (inner && (inner.startsWith(">") || inner.startsWith("<"))) {
+        op = inner;
+        fdSkip = 1;
+      }
+    }
     if (op) {
+      i += fdSkip;
       tokens.push({ kind: "op", text: op, quoted: false, subshells: [] });
       i += op.length;
       if (op === "<<" || op === "<<-") {
@@ -342,6 +359,10 @@ export function tokenize(src: string): { tokens: Tok[]; heredoc: boolean } {
         quoted = true;
         i++;
         while (i < src.length && src[i] !== '"') {
+          if (src[i] === "\\" && src[i + 1] === "\n") {
+            i += 2; // line continuation inside double quotes
+            continue;
+          }
           if (src[i] === "\\" && i + 1 < src.length) {
             if (startsWindowsPath()) {
               winPath = true;
@@ -457,6 +478,7 @@ export function parseCommands(src: string): { commands: SimpleCommand[]; heredoc
           const target = tokens[k + 1];
           if (target && target.kind === "word") {
             cur.redirects.push({ op: t.text, target: target.text });
+            if (target.subshells.length) (cur.redirectSubshells ??= []).push(...target.subshells);
             k++;
           }
           break;
@@ -486,7 +508,7 @@ function stripWrappers(argv: string[]): { argv: string[]; sudo: boolean } {
   let sudo = false;
   let a = [...argv];
   for (;;) {
-    while (a.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(a[0]!)) a.shift(); // FOO=bar prefix
+    if (a.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(a[0]!)) break; // an assignment: the caller records it
     if (!a.length) break;
     const p = base(a[0]!);
     if (!WRAPPERS.has(p)) break;
@@ -495,7 +517,8 @@ function stripWrappers(argv: string[]): { argv: string[]; sudo: boolean } {
     // drop wrapper options (and the value of -u / -g / -n for sudo/timeout)
     while (a.length && a[0]!.startsWith("-")) {
       const f = a.shift()!;
-      if ((p === "sudo" && (f === "-u" || f === "-g")) || (p === "timeout" && f === "-s")) a.shift();
+      // options that take a value: the value is not the command
+      if ((p === "sudo" && (f === "-u" || f === "-g" || f === "-C" || f === "-p")) || (p === "timeout" && (f === "-s" || f === "-k")) || (p === "nice" && f === "-n") || (p === "ionice" && (f === "-c" || f === "-n"))) a.shift();
     }
     if (p === "timeout" && a.length && /^\d/.test(a[0]!)) a.shift(); // timeout DURATION cmd
   }
@@ -508,8 +531,10 @@ function base(p: string): string {
 }
 
 function isPathLike(tok: string): boolean {
-  // a drive-letter prefix (D:\proj\.env, C:/x) is a path on Windows; the POSIX tokenizer keeps it when quoted
-  return tok.includes("/") || tok.includes("\\") || tok.startsWith("~") || /^[A-Za-z]:[\\/]/.test(tok) || /^\.[A-Za-z]/.test(tok) || /\.(pem|key|p12|pfx)$/i.test(tok);
+  // a drive-letter prefix (D:\proj\.env, C:/x) is a path on Windows; the POSIX tokenizer keeps it when quoted.
+  // A bare filename with no slash is a path too when it matches a secret pattern (terraform.tfstate, app.jks):
+  // the patterns decide, so a new pattern is never silently invisible to the tokenizer.
+  return tok.includes("/") || tok.includes("\\") || tok.startsWith("~") || /^[A-Za-z]:[\\/]/.test(tok) || /^\.[A-Za-z]/.test(tok) || /\.(pem|key|p12|pfx)$/i.test(tok) || matchesSecretPattern(tok);
 }
 
 function expandHome(tok: string, home: string): string {
@@ -550,8 +575,36 @@ export function analyzeShell(command: string, opts: { secretPatterns?: string[];
     }
   }
 
+  // Simple variable assignments seen so far (`f=.env; cat $f`). A value we know is substituted before judging,
+  // so a path cannot be hidden behind a name. Unknown variables stay as-is and are reported in envRefs.
+  const vars = new Map<string, string>();
+  const substitute = (a: string): string => a.replace(/\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?/g, (m, name: string) => vars.get(name) ?? m);
+
   const visit = (cmd: SimpleCommand) => {
-    const { argv, sudo: s } = stripWrappers(cmd.argv);
+    // leading NAME=value words are assignments: remember them, then judge the command that follows (if any)
+    // `{ cmd; }` groups: the braces are syntax, not programs
+    while (cmd.argv.length && (cmd.argv[0] === "{" || cmd.argv[0] === "}")) cmd.argv.shift();
+    while (cmd.argv.length && cmd.argv[cmd.argv.length - 1] === "}") cmd.argv.pop();
+    const takeAssignments = (list: string[]): string[] => {
+      let l = list;
+      while (l.length && /^[A-Za-z_][A-Za-z0-9_]*=/.test(l[0]!)) {
+        const eq = l[0]!.indexOf("=");
+        vars.set(l[0]!.slice(0, eq), substitute(l[0]!.slice(eq + 1)));
+        l = l.slice(1);
+      }
+      return l;
+    };
+    // assignments may sit before or after a wrapper (`command f=.env; cat $f` runs the assignment); take both
+    let rawArgv = takeAssignments(cmd.argv);
+    if (!rawArgv.length) return;
+    const { argv: argv0, sudo: s } = stripWrappers(rawArgv);
+    rawArgv = takeAssignments(argv0);
+    if (!rawArgv.length) {
+      // a wrapper with nothing to wrap: `env` (or `sudo env`) prints the whole environment, secrets included
+      if (cmd.argv.some((a) => base(a) === "env")) sensitiveRead = true;
+      return;
+    }
+    const argv = rawArgv.map(substitute);
     if (s) sudo = true;
     if (!argv.length) {
       // `env` with nothing after it prints the whole environment
@@ -565,6 +618,13 @@ export function analyzeShell(command: string, opts: { secretPatterns?: string[];
       offensiveTool = true;
       ops.add(`offensive:${prog}`);
     }
+    // a file read out of git history is still a read of that file: `git show HEAD:.env`, `git cat-file -p :.env`
+    if (prog === "git") {
+      for (const a of args) {
+        const m = /^[^:\s]*:(.+)$/.exec(a);
+        if (m && m[1] && !a.startsWith("-") && !/^https?:|^git@|^ssh:|^file:/.test(a)) paths.add(expandHome(m[1], home));
+      }
+    }
     // impacket-style scripts run through an interpreter, e.g. "python3 secretsdump.py".
     // Only a local .py argument counts; a name inside a URL path (github.com/nmap/nmap) does not.
     for (const a of args) {
@@ -577,6 +637,17 @@ export function analyzeShell(command: string, opts: { secretPatterns?: string[];
     }
 
     // Yenop's own files: writing them (or anything that is not plain viewing), stopping the daemon, re-running init.
+    for (const r of cmd.redirects) r.target = substitute(r.target); // `> $f` with a known f
+    // `> $(echo path)` / `> \`echo path\``: the placeholder hides the target; judge every path the subshell names
+    for (const r of cmd.redirects) {
+      if (r.target === "$(...)" && cmd.redirectSubshells) {
+        for (const inner of cmd.redirectSubshells) for (const p of pathsMentioned(inner).concat(inner.split(/\s+/).filter(isPathLike))) {
+          const e = expandHome(p, home);
+          paths.add(e);
+          if (isControlPlanePath(e)) controlPlane = true;
+        }
+      }
+    }
     for (const r of cmd.redirects) if (r.op !== "<" && r.op !== "<<<" && isControlPlanePath(expandHome(r.target, home))) controlPlane = true;
     if (!VIEWERS.has(prog) && args.some((a) => !a.startsWith("-") && isControlPlanePath(expandHome(a, home)))) controlPlane = true;
     if (prog === "yenop" && ((args[0] === "daemon" && (args[1] === "stop" || args[1] === "run")) || args[0] === "init")) controlPlane = true;
@@ -585,7 +656,15 @@ export function analyzeShell(command: string, opts: { secretPatterns?: string[];
       if (r.op !== "<<<" && isPathLike(r.target)) paths.add(expandHome(r.target, home));
       if ((r.op === ">" || r.op === ">|" || r.op === "&>") && /^\/dev\/(sd|disk|nvme|hd|mmcblk)/.test(r.target)) destructive = true;
     }
-    for (const a of args) if (isPathLike(a) && !a.startsWith("-")) paths.add(expandHome(a, home));
+    // the code handed to an interpreter (`sh -c '...'`, `python3 -c '...'`) is judged as code above, never as a path
+    const codeArg = INTERPRETERS.has(prog) ? args.findIndex((a) => a === "-c" || a === "-e" || a === "--eval" || a === "-p") : -1;
+    for (const [i, a] of args.entries()) {
+      if (codeArg !== -1 && i === codeArg + 1) continue;
+      if (isPathLike(a) && !a.startsWith("-")) paths.add(expandHome(a, home));
+      // key=value arguments carry paths too: dd if=.env, --file=.env, --input=/x, KEY=.env for a program
+      const kv = /^(?:--?[A-Za-z][\w-]*|[A-Za-z_][\w]*)=(.+)$/.exec(a);
+      if (kv && kv[1] && isPathLike(kv[1])) paths.add(expandHome(kv[1], home));
+    }
     // file references inside arguments: curl's `@file`, `field=@file`, `--data-binary @file`, `-T file`, `--upload-file file`
     for (const a of args) {
       const m = /(?:^|=)@([^@\s;]+)$/.exec(a);

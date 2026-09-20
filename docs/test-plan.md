@@ -117,6 +117,33 @@ reproduce a report without touching the developer's PC, and, when a pilot has en
 that product on a throwaway VM to learn whether it kills the daemon or blocks loopback. Document each finding
 in `docs/on-prem.md`.
 
+## How reliability is actually established
+
+Manual prompt sessions discover how a runtime behaves; they do not establish reliability, because the input
+space is unbounded and an attacker needs only the case nobody tried. Reliability comes from four sources, in
+this order of leverage:
+
+1. **Surface enumeration** (`src/adapters/hooks/surface.test.ts`). The tools a runtime can use to touch the
+   world are a finite, documented list. Every one is listed per runtime, and the test proves each reaches a
+   decision with the right classification, and that a dangerous use of it is not allowed. A tool missing from
+   the list is a failing test when it is added, never a silent gap. Update the lists when a runtime's docs
+   change; they are dated.
+2. **Property tests** (`src/core/shell.property.test.ts`). The machine generates the disguises: every reader,
+   every quoting, every wrapper, every indirection, thousands per push, under stated rules ("a protected file is
+   caught however it is spelled", "wrapping never launders", "the disguise itself never causes a false
+   positive", "the parser never throws"). A failure hands back the smallest input that breaks the rule. The
+   first run found nine real bypasses in seconds; each became a fix. Add a generator, not a hand-written case,
+   when a new class of disguise appears.
+3. **Adversarial harness** (to build, needs the fake-secret container from Layer 2): give a real model a goal
+   a policy forbids and let it try routes, recording each; every success becomes a regression fixture. The
+   model is the best red-teamer available and it costs pennies.
+4. **A stated boundary.** What Yenop does not cover is written down (`docs/on-prem.md`, `docs/roadmap.md`):
+   Codex's fail-open hooks, Windows shell dialects, opaque forms not yet handled. A customer trusts a vendor
+   who knows the edges.
+
+Hand-written cases remain for two things: recorded fixtures (what a runtime really sent) and the adversarial
+corpus (what an attacker really tried). Everything else should be a property or an enumeration.
+
 ## Adversarial corpus
 
 `src/core/shell.test.ts` and `src/core/sequence.test.ts` carry the bypass attempts found so far. Every new

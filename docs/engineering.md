@@ -18,6 +18,10 @@
 - The shell tokenizer is POSIX, with one Windows rule: a word that begins like a drive path (`D:\`) or a relative one (`.\`, `..\`) keeps its backslashes literal; POSIX never starts a word that way. PowerShell and cmd syntax beyond paths (their operators, quoting, `-Path` arguments) is not parsed yet; Windows stays "not supported" for the shell surface until it is, and `docs/on-prem.md` says so.
 - `type`, `Get-Content`, `gc`, `select-string`, `dir`, `Get-ChildItem` count as viewers.
 
+## Testing philosophy
+- Reliability is not a prompt count. See `docs/test-plan.md`, "How reliability is actually established": surface enumeration, property tests, an adversarial harness, and a stated boundary. When tempted to add a hand-written parser case, add a generator to `shell.property.test.ts` instead.
+- The property tests run ~14,000 generated commands in under a second. Keep `numRuns` high; the cost is negligible and the coverage is the point.
+
 ## Testing
 - `docs/test-plan.md` is the authority. CI (`.github/workflows/ci.yml`) runs the suite on macOS, Ubuntu and Windows, proves the air-gapped install in a `--network none` container, and runs the suite on Rocky Linux 9.
 - Timing assertions multiply their budget by `YENOP_CI_PERF_FACTOR` (set to 4 in CI). Never loosen a local gate to make CI pass; set the factor.
