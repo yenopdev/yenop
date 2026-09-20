@@ -74,6 +74,8 @@ export const RECEIPT_VERSION = 1;
 export interface Receipt {
   /** Receipt format version. Parsers must reject versions they do not know. */
   v: number;
+  /** Hash of the previous receipt line: the tamper-evident chain. Absent on the first line and older files. */
+  prev?: string;
   /** "decision" (absent on older lines). Outcome lines carry kind "outcome". */
   kind?: "decision";
   id: string;
@@ -153,6 +155,8 @@ export interface StepRecord {
 /** Written when the runtime reports what became of a call Yenop asked about. */
 export interface OutcomeReceipt {
   v: number;
+  /** Hash of the previous receipt line (the chain covers every line, decisions and outcomes). */
+  prev?: string;
   kind: "outcome";
   id: string;
   ts: string;

@@ -25,8 +25,9 @@ usage:
   yenop decide < request.json          decide one DecisionRequest from stdin, print the Decision
   yenop check                          parse and validate every policy in every layer
   yenop schema                         print the policy vocabulary and an example
-  yenop receipts [--last N] [--run ID] [--all]
-                                       recent receipts for this project's tenant; --all for every project
+  yenop receipts [--last N] [--run ID] [--all] [--verify]
+                                       recent receipts for this project's tenant; --all for every project;
+                                       --verify checks the tamper-evident hash chain
   yenop explain <tool> [json-args]     dry-run a tool call against the policies without recording a real step
   yenop status                         show mode, layers, daemon, and where receipts go for the current project
   yenop playground [dir]               create a throwaway project with enforcement on, for testing in Claude Code
@@ -123,9 +124,19 @@ async function main(argv: string[]): Promise<number> {
       }
     }
     case "receipts": {
-      const { values } = parseArgs({ args: rest, options: { last: { type: "string", default: "20" }, run: { type: "string" }, all: { type: "boolean", default: false } } });
-      const { openYenop, readAllReceipts, answersFor, isOutcome } = await import("../core/index.js");
+      const { values } = parseArgs({ args: rest, options: { last: { type: "string", default: "20" }, run: { type: "string" }, all: { type: "boolean", default: false }, verify: { type: "boolean", default: false } } });
+      const { openYenop, readAllReceipts, answersFor, isOutcome, verifyReceipts } = await import("../core/index.js");
       const y = openYenop({ cwd: process.cwd(), dryRun: true });
+      if (values.verify) {
+        try {
+          const c = verifyReceipts(y.config.receiptsPath);
+          if (c.ok) process.stdout.write(`receipts intact: ${c.lines} line${c.lines === 1 ? "" : "s"} form an unbroken hash chain (${y.config.receiptsPath})\n`);
+          else process.stdout.write(`RECEIPTS TAMPERED: the chain breaks at line ${c.brokenAt} of ${c.lines} — ${c.reason}\n(${y.config.receiptsPath})\n`);
+          return c.ok ? 0 : 1;
+        } finally {
+          y.close();
+        }
+      }
       try {
         const everything = readAllReceipts(y.config.receiptsPath);
         const answers = answersFor(everything);

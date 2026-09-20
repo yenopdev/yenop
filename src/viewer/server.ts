@@ -167,7 +167,7 @@ function renderPage(): string {
   <div class="counts" id="counts"></div>
 </header>
 <main><div id="list"><div class="empty">Loading…</div></div></main>
-<footer>Read-only. This machine only. Every decision the agent made, as it happened. <span id="stamp"></span></footer>
+<footer>Read-only. This machine only. Every decision the agent made, hash-chained and verifiable. <span id="stamp"></span></footer>
 <script>
 let filter = "all";
 const esc = s => String(s).replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));

@@ -145,6 +145,16 @@ So does a policy file Yenop cannot load. If any layer contains a policy that doe
 
 The names a policy can use are frozen in [`policies/schema.cedarschema`](policies/schema.cedarschema). Every policy in every layer is validated against it when loaded; a misspelled attribute is an error with a suggestion, and a policy that can never apply is rejected too. Arguments of tools not typed in the schema are reachable as tags: `context.call.getTag("repo") == "acme/prod"`.
 
+## Tamper-evident receipts
+
+The receipts file is a hash chain: each line carries the hash of the line before it, so editing, deleting, or reordering any line is detectable.
+
+```sh
+yenop receipts --verify
+```
+
+reports an unbroken chain, or names the first line where it breaks and exits non-zero. This turns the log from "trust us" into evidence a third party can check. It is local tamper-evidence, not a signature: it catches changes to the recorded history; anchoring the head against wholesale rewrite or truncation is the control plane's job.
+
 ## Formats and versions
 
 | Thing | Version field | Where |

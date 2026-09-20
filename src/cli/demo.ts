@@ -131,7 +131,7 @@ export async function runDemo(opts: DemoOptions = {}): Promise<number> {
     const { readAllReceipts, isOutcome } = await import("../core/index.js");
     const rows = readAllReceipts(y.config.receiptsPath).filter((r) => !isOutcome(r)) as import("../core/index.js").Receipt[];
     out(`${c.cyan}${c.bold}The record${c.reset}`);
-    out(`${c.dim}Every decision left a receipt, in a plain append-only file. This is what your auditor, or your own team, reads later.${c.reset}`);
+    out(`${c.dim}Every decision left a receipt, in a plain append-only file, hash-chained so a changed or deleted line is detectable with "yenop receipts --verify". This is what your auditor reads.${c.reset}`);
     out();
     for (const r of rows) {
       const eff = r.effect === "allow" ? c.green : r.effect === "deny" ? c.red : c.yellow;

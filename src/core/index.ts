@@ -19,7 +19,7 @@ export { loadSchema, validateAgainstSchema } from "./policy.js";
 export { CONFIG_VERSION, resolveTenant, localTenantId } from "./config.js";
 export { STATE_VERSION, REPLAY_WINDOW_MS } from "./state.js";
 export { SqliteRunState, MemoryRunState } from "./state.js";
-export { JsonlReceipts, NullReceipts, readReceipts, readAllReceipts, answersFor, isOutcome, summarizeCall } from "./receipts.js";
+export { JsonlReceipts, NullReceipts, readReceipts, readAllReceipts, answersFor, isOutcome, summarizeCall, verifyReceipts, RECEIPT_GENESIS, type ChainCheck } from "./receipts.js";
 
 /** Directory of the default policy pack shipped with the package. */
 export function builtinPoliciesDir(): string {

@@ -1,4 +1,5 @@
 import { appendFileSync, mkdirSync, existsSync, readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { dirname } from "node:path";
 import type { OutcomeReceipt, Receipt, ReceiptSink } from "./types.js";
 
@@ -27,15 +28,71 @@ export function trimForReceipt(v: unknown, depth = 0): unknown {
 }
 
 /** Append-only JSON Lines file. One line per decision, written synchronously so a crash never loses it. */
+/** The chain's anchor: the "hash before the first line". A fixed, public constant. */
+export const RECEIPT_GENESIS = "yenop-receipts-v1";
+
+function sha256(s: string): string {
+  return createHash("sha256").update(s, "utf8").digest("hex");
+}
+
+/**
+ * Appends receipts as a hash chain: each line carries `prev`, the SHA-256 of the previous line's exact bytes.
+ * Editing, deleting or reordering any line makes the next line's `prev` wrong, so tampering is detectable with
+ * `verifyReceipts`. The hash is over the literal line, so there is no canonical-form step to get wrong. This is
+ * local tamper-evidence, not a signature: it catches changes to the recorded history, and truncation of the
+ * tail is caught by anchoring the head elsewhere (the control plane, later). Documented as such.
+ */
 export class JsonlReceipts implements ReceiptSink {
+  private prevHash: string;
   constructor(private path: string) {
     const dir = dirname(path);
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+    this.prevHash = lastLineHash(path);
   }
   append(receipt: Receipt | OutcomeReceipt): void {
-    appendFileSync(this.path, JSON.stringify(receipt) + "\n", "utf8");
+    const line = JSON.stringify({ ...receipt, prev: this.prevHash });
+    appendFileSync(this.path, line + "\n", "utf8");
+    this.prevHash = sha256(line);
   }
   close(): void {}
+}
+
+/** The chain hash to continue from: SHA-256 of the last line, or the genesis anchor for an empty/new file. */
+function lastLineHash(path: string): string {
+  if (!existsSync(path)) return RECEIPT_GENESIS;
+  const lines = readFileSync(path, "utf8").split("\n").filter((l) => l.length > 0);
+  const last = lines[lines.length - 1];
+  return last ? sha256(last) : RECEIPT_GENESIS;
+}
+
+export interface ChainCheck {
+  ok: boolean;
+  lines: number;
+  /** 1-based line number where the chain first breaks, if any. */
+  brokenAt?: number;
+  reason?: string;
+}
+
+/** Walk the receipts file and confirm every line's `prev` matches the hash of the line before it. */
+export function verifyReceipts(path: string): ChainCheck {
+  if (!existsSync(path)) return { ok: true, lines: 0 };
+  const lines = readFileSync(path, "utf8").split("\n").filter((l) => l.length > 0);
+  let expected = RECEIPT_GENESIS;
+  for (let i = 0; i < lines.length; i++) {
+    const text = lines[i]!;
+    let parsed: { prev?: string };
+    try {
+      parsed = JSON.parse(text) as { prev?: string };
+    } catch {
+      return { ok: false, lines: lines.length, brokenAt: i + 1, reason: "line is not valid JSON" };
+    }
+    const prev = parsed.prev ?? RECEIPT_GENESIS; // older unchained lines read as genesis-anchored
+    if (prev !== expected) {
+      return { ok: false, lines: lines.length, brokenAt: i + 1, reason: `prev hash does not match the line before it (a line was edited, removed, or reordered)` };
+    }
+    expected = sha256(text);
+  }
+  return { ok: true, lines: lines.length };
 }
 
 /** Every line of the receipts file: decisions and outcomes, oldest first. */
