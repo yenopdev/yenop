@@ -28,3 +28,4 @@ target/
 # built artifacts
 yenop-offline-*.tgz
 yenop-*.tgz
+harness/breaches/
