@@ -1,0 +1,27 @@
+{
+  "_meta": {
+    "source": "documented",
+    "note": "shape from the runtime's public docs; replace with a recorded event (see docs/test-plan.md)"
+  },
+  "expect": {
+    "kind": "decision",
+    "effect": "ask",
+    "permission": "ask"
+  },
+  "event": {
+    "conversation_id": "fx-cu-1",
+    "generation_id": "g1",
+    "model": "x",
+    "hook_event_name": "beforeMCPExecution",
+    "cursor_version": "3.6.0",
+    "workspace_roots": [
+      "__PROJECT__"
+    ],
+    "user_email": null,
+    "transcript_path": null,
+    "tool_name": "execute_sql",
+    "tool_input": "{\"query\":\"DELETE FROM customers\"}",
+    "mcp_server_name": "supabase",
+    "command": "npx supabase-mcp"
+  }
+}

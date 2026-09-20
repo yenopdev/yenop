@@ -24,8 +24,8 @@
  * message passes. A blocked call is never written to the server.
  */
 import { randomBytes } from "node:crypto";
-import type { Yenop, DecisionRequest, ToolRef } from "../../core/index.js";
-import { classifyTool } from "../../core/index.js";
+import type { Yenop, DecisionRequest } from "../../core/index.js";
+import { mcpToolRef } from "../../core/tools.js";
 
 type JsonId = number | string;
 interface JsonRpc {
@@ -94,11 +94,7 @@ const ELICIT_PREFIX = "yenop:";
 const PENDING_TTL_MS = 10 * 60 * 1000;
 const CAPS_META = "io.modelcontextprotocol/clientCapabilities";
 
-/** Build the tool reference the policy engine expects. The server's own annotations are not trusted; the name is heuristic. */
-export function mcpToolRef(server: string, name: string): ToolRef {
-  const t = classifyTool(`mcp__${server}__${name}`);
-  return { ...t, name, server };
-}
+export { mcpToolRef } from "../../core/tools.js";
 
 function canon(v: unknown): string {
   if (Array.isArray(v)) return `[${v.map(canon).join(",")}]`;

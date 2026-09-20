@@ -15,7 +15,8 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { openYenop, type Yenop, type DecisionRequest } from "../core/index.js";
-import { toDecisionRequest, hookDecisionBody, runIdOf, OUTCOME_EVENTS, type ClaudeCodeHookInput } from "../adapters/claude-code/hook.js";
+import { hookTranslator } from "../adapters/hooks/registry.js";
+import { decideEvent } from "../adapters/hooks/pipeline.js";
 
 export interface DaemonInfo {
   pid: number;
@@ -217,26 +218,25 @@ export async function startDaemon(opts: DaemonOptions = {}): Promise<RunningDaem
       if (req.method !== "POST") return send(res, 405, { error: "method not allowed" });
       if (!authorized(req)) return send(res, 401, { error: "unauthorized" });
       const raw = await readBody(req);
-      switch (url) {
-        case "/hooks/claude-code": {
-          let input: ClaudeCodeHookInput;
-          try {
-            input = JSON.parse(raw) as ClaudeCodeHookInput;
-          } catch {
-            return send(res, 200, {});
-          }
-          if (!input.tool_name || !input.session_id) return send(res, 200, {});
-          const y = cache.get(input.cwd);
-          const outcome = OUTCOME_EVENTS[input.hook_event_name ?? ""];
-          if (outcome) {
-            if (input.tool_use_id) y.recordOutcome(runIdOf(input), input.tool_use_id, input.tool_name, outcome, input.denial_reason);
-            return send(res, 200, {});
-          }
-          const d = y.decide(toDecisionRequest(input));
-          decisions++;
-          const body = hookDecisionBody(d.effect, d.message, y.config.mode);
-          return send(res, 200, body ?? {});
+      // Every hooked runtime: /hooks/<runtime>. The translator parses; a parse failure is a deny, not silence.
+      if (url.startsWith("/hooks/")) {
+        const t = await hookTranslator(url.slice("/hooks/".length));
+        if (!t) return send(res, 404, { error: "unknown hook runtime" });
+        let event;
+        try {
+          event = t.parse(raw);
+        } catch (e) {
+          const y = cache.get(undefined);
+          const reason = `malformed hook input: ${(e as Error).message.split("\n")[0]}`;
+          const fake = { kind: "decision" as const, event: "?", askCapable: false, request: { runId: "invalid", principal: { runtime: t.runtime, agent: "?", user: "?" }, tool: { name: "?", kind: "unknown" as const, readOnly: false }, args: {} } };
+          return send(res, 200, y.config.mode === "observe" ? {} : (t.body("deny", reason, y.config.mode, fake) ?? {}));
         }
+        const cwd = event.kind === "decision" ? event.request.cwd : undefined;
+        const y = cache.get(cwd);
+        if (event.kind === "decision") decisions++;
+        return send(res, 200, decideEvent(y, t, event) ?? {});
+      }
+      switch (url) {
         case "/decide": {
           const { cwd, request } = JSON.parse(raw) as { cwd?: string; request: DecisionRequest };
           const y = cache.get(cwd);

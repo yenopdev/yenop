@@ -9,7 +9,7 @@ Yenop decides which tool calls actually execute, who approved the ones that cann
 - **Spending limit:** step and deny breakers scoped to one run, not one month.
 - **Receipt:** an append-only record of every decision and the policy that made it.
 
-Status: pre-alpha. Two enforcement points today: the Claude Code hook, and an MCP gateway that works for any MCP client (Cursor, Claude Desktop, custom agents). Next: adapters for the OpenAI Agents SDK, LangGraph and n8n. Same core, same policies, same receipts for all of them.
+Status: pre-alpha. Enforcement points today: hooks for Claude Code and Cursor, and an MCP gateway that works for any MCP client. One engine, one set of policies, one receipt trail across all of them. Next: Codex CLI and Gemini CLI hooks, then adapters for the OpenAI Agents SDK, LangGraph and n8n.
 
 ## Install
 
@@ -44,6 +44,10 @@ From then on, every tool call Claude Code makes in this project passes through Y
 Receipts: `node dist/cli/main.js receipts --last 20`. Raw file: `~/.yenop/receipts.jsonl`.
 
 Yenop only ever tightens. It never grants something Claude Code would have asked about.
+
+## Cursor
+
+`yenop init` detects Cursor and writes its hooks into `.cursor/hooks.json` (or `~/.cursor/hooks.json` with `--user`): shell commands and MCP calls can be allowed, asked, or denied; file reads and file edits can be allowed or denied. Cursor cannot ask a person for file edits, so a step that needs one is blocked with a message rather than let through. Every hook is installed fail-closed, so a crash or timeout blocks instead of allowing. Editing `.cursor/hooks.json` through Cursor itself is treated as a change to Yenop and needs a person.
 
 ## Any MCP agent: the gateway
 

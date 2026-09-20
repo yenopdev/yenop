@@ -5,8 +5,8 @@
  */
 import { classifyTool } from "../../core/tools.js";
 import type { DecisionRequest } from "../../core/types.js";
-import { userInfo, homedir } from "node:os";
-import { join } from "node:path";
+import type { Mode } from "../../core/config.js";
+import { runHookWith, safeUser, readStdin as readStdinShared, type HookEvent, type HookRunResult, type HookTranslator } from "../hooks/pipeline.js";
 
 export interface ClaudeCodeHookInput {
   session_id: string;
@@ -58,18 +58,8 @@ export function toDecisionRequest(input: ClaudeCodeHookInput): DecisionRequest {
   return req;
 }
 
-function safeUser(): string {
-  try {
-    return userInfo().username;
-  } catch {
-    return "unknown";
-  }
-}
 
-export interface HookRunResult {
-  stdout: string;
-  exitCode: number;
-}
+export type { HookRunResult };
 
 /**
  * The JSON Claude Code should receive, or null when Yenop has nothing to say
@@ -99,59 +89,37 @@ function renderFromBody(body: ClaudeCodeHookOutput | Record<string, never>): Hoo
 }
 
 /**
- * Command hook entry point. Fast path: forward to the resident daemon (~1 ms plus Node startup).
- * Fallback: decide in this process, then start a daemon for next time.
+ * Parse a Claude Code hook event. Throws on input that is not Claude Code's JSON, so the pipeline fails closed:
+ * a permission hook that cannot read its input must block, not shrug.
  */
-export async function runHook(raw: string): Promise<HookRunResult> {
-  let input: ClaudeCodeHookInput;
-  try {
-    input = JSON.parse(raw) as ClaudeCodeHookInput;
-  } catch {
-    // Not our JSON. Never block on a parse problem; let Claude Code's own flow apply.
-    return { stdout: "", exitCode: 0 };
+export function parseClaudeCode(raw: string): HookEvent {
+  const input = JSON.parse(raw) as ClaudeCodeHookInput; // throws → deny
+  if (typeof input.tool_name !== "string" || typeof input.session_id !== "string") throw new Error("claude-code hook event without tool_name/session_id");
+  const outcome = OUTCOME_EVENTS[input.hook_event_name ?? ""];
+  if (outcome) {
+    if (!input.tool_use_id) return { kind: "ignore" };
+    const ev: HookEvent = { kind: "outcome", runId: runIdOf(input), callId: input.tool_use_id, tool: input.tool_name, outcome };
+    if (input.denial_reason !== undefined) ev.detail = input.denial_reason;
+    return ev;
   }
-  if (!input.tool_name || !input.session_id) return { stdout: "", exitCode: 0 };
-
-  const home = process.env["YENOP_HOME"] ?? join(homedir(), ".yenop");
-  const useDaemon = process.env["YENOP_NO_DAEMON"] !== "1";
-  if (useDaemon) {
-    const { readDaemonInfoFast, rawPost } = await import("../../daemon/fast.js");
-    const info = readDaemonInfoFast(home);
-    if (info) {
-      try {
-        const r = await rawPost(info, "/hooks/claude-code", raw, 1500);
-        if (r.status === 200) return renderFromBody(JSON.parse(r.body) as ClaudeCodeHookOutput | Record<string, never>);
-      } catch {
-        /* daemon not reachable: fall through and decide here */
-      }
-    }
-  }
-
-  const { openYenop } = await import("../../core/index.js");
-  const yenop = openYenop(input.cwd !== undefined ? { cwd: input.cwd } : {});
-  try {
-    const outcome = OUTCOME_EVENTS[input.hook_event_name ?? ""];
-    if (outcome) {
-      if (input.tool_use_id) yenop.recordOutcome(runIdOf(input), input.tool_use_id, input.tool_name, outcome, input.denial_reason);
-      return { stdout: "", exitCode: 0 };
-    }
-    const decision = yenop.decide(toDecisionRequest(input));
-    return renderHookResult(decision.effect, decision.message, yenop.config.mode);
-  } finally {
-    yenop.close();
-    if (useDaemon) {
-      const { startDaemonDetached } = await import("../../daemon/client.js");
-      try {
-        startDaemonDetached(home);
-      } catch {
-        /* next call will try again */
-      }
-    }
-  }
+  if (input.hook_event_name !== undefined && input.hook_event_name !== "PreToolUse") return { kind: "ignore" };
+  return { kind: "decision", event: "PreToolUse", askCapable: true, request: toDecisionRequest(input) };
 }
 
-export async function readStdin(): Promise<string> {
-  const chunks: Buffer[] = [];
-  for await (const c of process.stdin) chunks.push(c as Buffer);
-  return Buffer.concat(chunks).toString("utf8");
+export const claudeCodeTranslator: HookTranslator = {
+  runtime: "claude-code",
+  parse: parseClaudeCode,
+  body: (effect: "allow" | "ask" | "deny", message: string, mode: Mode) => hookDecisionBody(effect, message, mode) as Record<string, unknown> | null,
+  result: (body) => renderFromBody((body ?? {}) as ClaudeCodeHookOutput | Record<string, never>),
+  failure: (reason) => ({
+    stdout: JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: `Yenop failed and refuses by default: ${reason}. Run "yenop status".` } }),
+    exitCode: 2,
+  }),
+};
+
+/** Command hook entry point: the shared pipeline with the Claude Code translator. */
+export function runHook(raw: string): Promise<HookRunResult> {
+  return runHookWith(claudeCodeTranslator, raw);
 }
+
+export const readStdin = readStdinShared;

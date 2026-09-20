@@ -8,6 +8,8 @@ import { rawPost } from "./fast.js";
 
 let home: string;
 let proj: string;
+/** Performance gates are strict on a developer machine and relaxed on noisy CI runners (see docs/test-plan.md). */
+const PERF = Number(process.env["YENOP_CI_PERF_FACTOR"] ?? 1);
 let d: RunningDaemon;
 let info: DaemonInfo;
 const logs: string[] = [];
@@ -49,7 +51,7 @@ describe("daemon", () => {
     const t0 = performance.now();
     for (let i = 0; i < 20; i++) await hook("Bash", { command: "ls -la" });
     const per = (performance.now() - t0) / 20;
-    expect(per).toBeLessThan(15); // round trip incl. receipt write; typically ~2 ms
+    expect(per).toBeLessThan(15 * PERF); // round trip incl. receipt write; typically ~2 ms locally
   });
   it("writes receipts and counts decisions", async () => {
     const h = await daemonHealthy(info);
@@ -106,8 +108,30 @@ describe("daemon", () => {
     const lines = readFileSync(join(home, "receipts.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l) as { kind?: string; callId?: string; outcome?: string });
     expect(lines.filter((l) => l.kind === "outcome" && l.callId === "toolu_out_1")).toEqual([expect.objectContaining({ outcome: "ran" })]);
   });
-  it("never blocks on a malformed hook body", async () => {
-    const r = await daemonRequest<Record<string, unknown>>(info, "/hooks/claude-code", { nonsense: true });
-    expect(r).toEqual({});
+  it("denies on a malformed hook body instead of shrugging (fail closed)", async () => {
+    const r = await daemonRequest<{ hookSpecificOutput?: { permissionDecision: string; permissionDecisionReason: string } }>(info, "/hooks/claude-code", { nonsense: true });
+    expect(r.hookSpecificOutput?.permissionDecision).toBe("deny");
+    expect(r.hookSpecificOutput?.permissionDecisionReason).toMatch(/malformed/);
+  });
+  it("answers the Cursor hook through the same route, in Cursor's language", async () => {
+    const proj2 = join(home, "proj-cursor"); // its own project: an earlier test put `proj` in observe mode
+    mkdirSync(proj2, { recursive: true });
+    const base = { conversation_id: "c", generation_id: "g", workspace_roots: [proj2] };
+    const ok = await daemonRequest<{ permission: string }>(info, "/hooks/cursor", { ...base, hook_event_name: "beforeShellExecution", command: "npm test", cwd: proj2 });
+    expect(ok).toEqual({ permission: "allow" });
+    const ask = await daemonRequest<{ permission: string; user_message: string }>(info, "/hooks/cursor", { ...base, hook_event_name: "beforeShellExecution", command: "rm -rf build", cwd: proj2 });
+    expect(ask.permission).toBe("ask");
+    const deny = await daemonRequest<{ permission: string }>(info, "/hooks/cursor", { ...base, hook_event_name: "beforeReadFile", file_path: join(proj2, ".env"), content: "" });
+    expect(deny.permission).toBe("deny");
+    const bad = await daemonRequest<{ permission: string }>(info, "/hooks/cursor", { nonsense: true });
+    expect(bad.permission).toBe("deny");
+    await expect(daemonRequest(info, "/hooks/nope", {})).rejects.toThrow(/404/);
+  });
+  it("is as fast for Cursor as for Claude Code", async () => {
+    const body = { conversation_id: "c", generation_id: "g", workspace_roots: [proj], hook_event_name: "beforeShellExecution", command: "npm test", cwd: proj };
+    await daemonRequest(info, "/hooks/cursor", body);
+    const t0 = performance.now();
+    for (let i = 0; i < 20; i++) await daemonRequest(info, "/hooks/cursor", body);
+    expect((performance.now() - t0) / 20).toBeLessThan(15 * PERF);
   });
 });

@@ -1,0 +1,22 @@
+{
+  "_meta": {
+    "source": "documented",
+    "note": "shape from the runtime's public docs; replace with a recorded event (see docs/test-plan.md)"
+  },
+  "expect": {
+    "kind": "outcome"
+  },
+  "event": {
+    "session_id": "fx-cc-1",
+    "cwd": "__PROJECT__",
+    "hook_event_name": "PostToolUse",
+    "tool_name": "Bash",
+    "tool_input": {
+      "command": "rm -rf build"
+    },
+    "tool_response": {
+      "stdout": ""
+    },
+    "tool_use_id": "toolu_fx1"
+  }
+}

@@ -134,8 +134,19 @@ function looksLikeReverseShell(command: string): boolean {
 const DB_CLIENTS = new Set(["psql", "pg_dump", "pg_dumpall", "mysql", "mysqldump", "mongosh", "mongo", "mongodump", "redis-cli", "sqlite3", "sqlcmd", "clickhouse-client", "bq", "snowsql"]);
 
 /** Paths that hold Yenop's own configuration, or the hook registration that puts Yenop in the loop. */
+/**
+ * Files that configure Yenop or that register its hooks in a runtime. An agent that can edit these can switch
+ * the guard off, so writing them needs a person. One entry per hooked runtime: add here when adding a runtime.
+ */
+const CONTROL_PLANE = [
+  /(^|\/)\.yenop(\/|$)/,
+  /(^|\/)\.claude\/settings(\.local)?\.json$/,
+  /(^|\/)\.cursor\/hooks\.json$/,
+  /(^|\/)\.codex\/(hooks\.json|config\.toml)$/,
+  /(^|\/)\.gemini\/settings\.json$/,
+];
 export function isControlPlanePath(p: string): boolean {
-  return /(^|\/)\.yenop(\/|$)/.test(p) || /(^|\/)\.claude\/settings(\.local)?\.json$/.test(p);
+  return CONTROL_PLANE.some((re) => re.test(p));
 }
 const VIEWERS = new Set(["cat", "less", "more", "head", "tail", "grep", "rg", "ls", "wc", "stat", "file", "diff", "bat", "jq", "find", "tree", "du", "cd", "test", "["]);
 

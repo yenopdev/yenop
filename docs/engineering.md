@@ -12,6 +12,20 @@
 - Policies are layered: baseline (shipped, in `policies/`), home (`~/.yenop/policies`), project (`<repo>/.yenop/policies`), plus `disabledPolicies` in config. Init never copies the baseline; users never edit shipped files.
 - Every policy has an `@id`. Evaluation errors fail closed. The Claude Code adapter only tightens: it prints nothing on allow.
 
+## Testing
+- `docs/test-plan.md` is the authority. CI (`.github/workflows/ci.yml`) runs the suite on macOS, Ubuntu and Windows, proves the air-gapped install in a `--network none` container, and runs the suite on Rocky Linux 9.
+- Timing assertions multiply their budget by `YENOP_CI_PERF_FACTOR` (set to 4 in CI). Never loosen a local gate to make CI pass; set the factor.
+- Tests must be separator-agnostic (`path.sep`), never assume `/tmp` exists as a real directory, and never shell out to `sh`. The service tests take an explicit platform for this reason.
+- `fixtures/hooks/<runtime>/` is replayed by `src/adapters/hooks/fixtures.test.ts`; `YENOP_RECORD_HOOKS=<dir>` records real events; `scripts/promote-fixture.mjs` turns a recording into a redacted fixture. A runtime claimed as supported must have recorded, not documented, fixtures.
+
+## Hook pipeline (every hooked runtime)
+- `src/adapters/hooks/pipeline.ts` is the shared core; `src/adapters/hooks/registry.ts` maps a runtime name to a lazily loaded translator; each runtime has `src/adapters/<runtime>/hook.ts` (parse the runtime's event into a `HookEvent`, render Yenop's decision as the runtime's answer, render a failure that blocks) and `install.ts`.
+- Fail closed everywhere: `parse` throws on input it cannot make sense of, the CLI renders `translator.failure()` (a deny) and the daemon route answers a deny body. A permission hook must never print nothing when it should have judged. The only escape hatch is observe mode, which is operator configuration.
+- `askCapable: false` on an event means the runtime can only allow or deny there; an ask becomes a deny with a message, never an allow.
+- Performance: the hook command must stay near bare Node startup (measured 2026-09-20: Claude Code 49 ms, Cursor 53 ms via the daemon, ~130 ms in-process). Translators import only `core/tools.js`, `core/types.js` and `core/config.js` types; never `core/index.js`, which loads the Cedar engine. The registry is lazy for the same reason. Re-measure after touching anything on this path.
+- Every runtime's hook registration file is a control-plane path (`isControlPlanePath` in `src/core/shell.ts`): add the new runtime's file there when adding a runtime, and a test in `shell.test.ts`.
+- Cursor specifics: `beforeShellExecution` and `beforeMCPExecution` can ask; `beforeReadFile` and `preToolUse` cannot; `preToolUse` judges only file-mutation tools (shell and MCP are judged by their own hooks, so nothing is decided twice); MCP `tool_input` is a JSON string, parsed defensively; the installer sets `failClosed: true` on decision events only and writes atomically. Cursor's exact built-in tool names in `preToolUse` still need a check against a live Cursor before a pilot.
+
 ## MCP gateway
 - `src/adapters/mcp/gateway.ts` is the transport-agnostic core (`gateClientMessage`, `pumpGateway`); `run.ts` wires stdio to a spawned server. stdio is newline-delimited JSON-RPC, one message per line. Only `tools/call` is gated; every other message passes.
 - A blocked call is answered to the client as a tool error (`isError: true`) and never written to the server's stdin. This is the security invariant: test it stays true.

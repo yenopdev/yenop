@@ -1,0 +1,30 @@
+{
+  "_meta": {
+    "source": "documented",
+    "note": "policy says ask (changes-to-yenop-itself); Cursor's preToolUse cannot ask, so the rendered answer is deny"
+  },
+  "expect": {
+    "kind": "decision",
+    "effect": "ask",
+    "permission": "deny"
+  },
+  "event": {
+    "conversation_id": "fx-cu-1",
+    "generation_id": "g1",
+    "model": "x",
+    "hook_event_name": "preToolUse",
+    "cursor_version": "3.6.0",
+    "workspace_roots": [
+      "__PROJECT__"
+    ],
+    "user_email": null,
+    "transcript_path": null,
+    "tool_name": "Write",
+    "tool_input": {
+      "file_path": "__PROJECT__/.cursor/hooks.json",
+      "contents": "{}"
+    },
+    "tool_use_id": "tu-fx1",
+    "agent_message": ""
+  }
+}

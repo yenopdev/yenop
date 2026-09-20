@@ -29,14 +29,14 @@ export const YENOP_HOOK_MARKER = "hook claude-code";
  * install or `npm link`), use the short form so the settings file carries no machine path.
  * Otherwise fall back to node plus the absolute path of this build.
  */
-export function hookCommandFor(cliPath: string): string {
+export function hookCommandFor(cliPath: string, runtime = "claude-code"): string {
   try {
     const which = execFileSync("sh", ["-lc", "command -v yenop"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
-    if (which && realpathSync(which) === realpathSync(cliPath)) return "yenop hook claude-code";
+    if (which && realpathSync(which) === realpathSync(cliPath)) return `yenop hook ${runtime}`;
   } catch {
     /* not on PATH */
   }
-  return `node ${JSON.stringify(cliPath)} hook claude-code`;
+  return `node ${JSON.stringify(cliPath)} hook ${runtime}`;
 }
 
 /**

@@ -54,3 +54,9 @@ export function classifyTool(name: string): ToolRef {
   }
   return { name, kind: "unknown", readOnly: false };
 }
+
+/** The tool reference for an MCP call seen by name: classification is Yenop's heuristic, never the server's annotation. */
+export function mcpToolRef(server: string, name: string): ToolRef {
+  const t = classifyTool(`mcp__${server}__${name}`);
+  return { ...t, name, server };
+}

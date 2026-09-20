@@ -12,13 +12,13 @@ import { fileURLToPath } from "node:url";
 const USAGE = `yenop — the layer between an AI agent and the systems it can touch
 
 usage:
-  yenop init [--user] [--no-hook] [--mode enforce|observe] [--hook http|command]
+  yenop init [--user] [--no-hook] [--mode enforce|observe] [--hook http|command] [--agents a,b]
                                        set up ~/.yenop, start the daemon, install the Claude Code hook
                                        (project scope: .claude/settings.local.json; --user: ~/.claude/settings.json)
   yenop daemon run|start|stop|status   the resident decision service on 127.0.0.1
   yenop service install|uninstall|status|show
                                        keep the daemon alive under launchd (macOS) or systemd (Linux)
-  yenop hook claude-code               (called by Claude Code) read a PreToolUse event on stdin, decide, respond
+  yenop hook claude-code|cursor        (called by the agent) read its pre-action event on stdin, decide, answer
   yenop mcp [--server NAME] [--on-ask elicit|block|allow] -- CMD ...
                                        sit between an MCP client and an MCP server; gate every tools/call
                                        and ask the person through the client when a call needs one
@@ -46,18 +46,20 @@ async function main(argv: string[]): Promise<number> {
   const [cmd, ...rest] = argv;
   switch (cmd) {
     case "hook": {
-      if (rest[0] !== "claude-code") return fail(`unknown hook runtime: ${rest[0] ?? "(none)"}`);
-      const { runHook, readStdin } = await import("../adapters/claude-code/hook.js");
+      const { hookTranslator, hookRuntimes } = await import("../adapters/hooks/registry.js");
+      const t = await hookTranslator(rest[0] ?? "");
+      if (!t) return fail(`unknown hook runtime: ${rest[0] ?? "(none)"}; known: ${hookRuntimes().join(", ")}`);
+      const { runHookWith, readStdin } = await import("../adapters/hooks/pipeline.js");
       try {
-        const r = await runHook(await readStdin());
+        const r = await runHookWith(t, await readStdin());
         if (r.stdout) process.stdout.write(r.stdout + "\n");
         return r.exitCode;
       } catch (e) {
-        // Claude Code treats any other exit code as "no opinion". A guard that broke must say no, loudly.
+        // A guard that broke must say no, loudly, in the runtime's own language. Observe mode records only.
         if (process.env["YENOP_MODE"] === "observe") return 0;
-        const reason = `Yenop failed and refuses by default: ${(e as Error).message.split("\n")[0]}. Run "yenop status".`;
-        process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: reason } }) + "\n");
-        return 2;
+        const r = t.failure((e as Error).message.split("\n")[0] ?? "unknown error");
+        if (r.stdout) process.stdout.write(r.stdout + "\n");
+        return r.exitCode;
       }
     }
     case "mcp": {
@@ -168,6 +170,19 @@ async function main(argv: string[]): Promise<number> {
         const { serviceState } = await import("../daemon/service.js");
         const svc = serviceState();
         if (svc.state !== "not-installed") process.stdout.write(`service:   ${svc.state}\n`);
+        // Which agents on this machine are hooked, and where. The claim "every agent" is checked, not assumed.
+        const hooked = (path: string, marker: string): boolean => {
+          try {
+            return existsSync(path) && readFileSync(path, "utf8").includes(marker);
+          } catch {
+            return false;
+          }
+        };
+        const cover = (project: string, user: string, marker: string): string =>
+          hooked(project, marker) ? "project" : hooked(user, marker) ? "user" : "no";
+        const claude = cover(join(process.cwd(), ".claude", "settings.local.json"), join(homedir(), ".claude", "settings.json"), "hook claude-code");
+        const cursor = cover(join(process.cwd(), ".cursor", "hooks.json"), join(homedir(), ".cursor", "hooks.json"), "hook cursor");
+        process.stdout.write(`agents:    claude-code=${claude}  cursor=${cursor}   (yenop init hooks what it detects; --agents forces a list)\n`);
         return 0;
       } finally {
         y.close();
@@ -331,6 +346,7 @@ async function init(rest: string[]): Promise<number> {
       "no-hook": { type: "boolean", default: false },
       mode: { type: "string", default: "enforce" },
       hook: { type: "string", default: "command" },
+      agents: { type: "string" },
     },
   });
   if (values.mode !== "enforce" && values.mode !== "observe") return fail(`--mode must be enforce or observe`);
@@ -381,6 +397,16 @@ async function init(rest: string[]): Promise<number> {
       const r = installClaudeCodeHook(settingsPath, hookCommandFor(fileURLToPath(import.meta.url)));
       process.stdout.write(`${r.changed ? "installed" : "already installed"} Claude Code hook in ${r.path}\n`);
     }
+    // Every other agent on this machine gets the same guard. Detected automatically; --agents forces a list.
+    const cliPath = fileURLToPath(import.meta.url);
+    const wanted = values.agents ? values.agents.split(",").map((s) => s.trim()).filter(Boolean) : undefined;
+    const { installCursorHooks, cursorHooksPath, cursorDetected } = await import("../adapters/cursor/install.js");
+    if (wanted ? wanted.includes("cursor") : cursorDetected(process.cwd())) {
+      const r = installCursorHooks(cursorHooksPath(values.user ? "user" : "project", process.cwd()), hookCommandFor(cliPath, "cursor"));
+      process.stdout.write(`${r.changed ? "installed" : "already installed"} Cursor hooks in ${r.path}\n`);
+    }
+    const { hookRuntimes } = await import("../adapters/hooks/registry.js");
+    process.stdout.write(`agents Yenop can hook: ${hookRuntimes().join(", ")}\n`);
   }
   return 0;
 }
