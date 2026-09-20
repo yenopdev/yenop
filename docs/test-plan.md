@@ -90,17 +90,18 @@ For each agent, on a fresh project with `yenop init` (enforce mode, playground i
 
 | Step | Claude Code | Cursor | Codex CLI | Gemini CLI |
 |---|---|---|---|---|
-| ordinary work (`npm test`, an edit) | allowed, silent | allowed, silent | | |
-| read `.env` | denied | denied (beforeReadFile) | | |
-| `rm -rf build` | asked, with the run's history | asked | | |
-| fetch a page, read env, call outside | third step asked | third step asked | | |
-| an MCP write | asked | asked (beforeMCPExecution) | | |
-| edit the hook config itself | asked (Claude Code can ask) | denied with explanation (Cursor cannot ask there) | | |
-| approve an ask, then `yenop receipts` | shows the answer | shows the answer where the event carries an id | | |
-| record fixtures for every event seen | `YENOP_RECORD_HOOKS` set | same | | |
+| ordinary work (`npm test`, an edit) | allowed, silent | allowed, silent | allowed, silent | |
+| read `.env` | denied | denied (beforeReadFile) | denied, exit 2 | |
+| `rm -rf build` | asked, with the run's history | asked | denied with "Codex cannot ask" and the history | |
+| fetch a page, read env, call outside | third step asked | third step asked | third step denied | |
+| an MCP write | asked | asked (beforeMCPExecution) | denied | |
+| edit the hook config itself | asked (Claude Code can ask) | denied with explanation (Cursor cannot ask there) | denied (via apply_patch headers) | |
+| approve an ask, then `yenop receipts` | shows the answer | shows the answer where the event carries an id | n/a: nothing is asked | |
+| record fixtures for every event seen | `YENOP_RECORD_HOOKS` set | same | same; an `apply_patch` event is the one to capture | |
 
 Open items to verify live: Cursor's built-in tool names in `preToolUse` (the adapter matches by pattern);
-Codex's shell-only hooks; Gemini's `BeforeTool` payload. Fill the empty columns as each adapter lands.
+Codex's `apply_patch` tool_input shape (string or `{patch}`); Gemini's `BeforeTool` payload. Fill the empty
+column as the Gemini adapter lands.
 
 Windows: run the same table on the Windows PC. Expect the service integration to be absent (documented) and
 the command hook to work; anything else that differs is a bug to file.

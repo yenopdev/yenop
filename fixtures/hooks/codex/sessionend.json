@@ -1,0 +1,19 @@
+{
+  "_meta": {
+    "source": "documented",
+    "note": "shape from learn.chatgpt.com/docs/hooks; replace with a recorded event. apply_patch tool_input shape (string vs {patch}) is the thing to confirm live."
+  },
+  "expect": {
+    "kind": "session-end"
+  },
+  "event": {
+    "session_id": "fx-cx-1",
+    "transcript_path": null,
+    "cwd": "__PROJECT__",
+    "hook_event_name": "SessionEnd",
+    "model": "x",
+    "permission_mode": "default",
+    "turn_id": "t1",
+    "reason": "other"
+  }
+}

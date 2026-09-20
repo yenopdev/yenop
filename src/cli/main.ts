@@ -18,7 +18,7 @@ usage:
   yenop daemon run|start|stop|status   the resident decision service on 127.0.0.1
   yenop service install|uninstall|status|show
                                        keep the daemon alive under launchd (macOS) or systemd (Linux)
-  yenop hook claude-code|cursor        (called by the agent) read its pre-action event on stdin, decide, answer
+  yenop hook claude-code|cursor|codex  (called by the agent) read its pre-action event on stdin, decide, answer
   yenop mcp [--server NAME] [--on-ask elicit|block|allow] -- CMD ...
                                        sit between an MCP client and an MCP server; gate every tools/call
                                        and ask the person through the client when a call needs one
@@ -53,12 +53,14 @@ async function main(argv: string[]): Promise<number> {
       try {
         const r = await runHookWith(t, await readStdin());
         if (r.stdout) process.stdout.write(r.stdout + "\n");
+        if (r.stderr) process.stderr.write(r.stderr + "\n");
         return r.exitCode;
       } catch (e) {
         // A guard that broke must say no, loudly, in the runtime's own language. Observe mode records only.
         if (process.env["YENOP_MODE"] === "observe") return 0;
         const r = t.failure((e as Error).message.split("\n")[0] ?? "unknown error");
         if (r.stdout) process.stdout.write(r.stdout + "\n");
+        if (r.stderr) process.stderr.write(r.stderr + "\n");
         return r.exitCode;
       }
     }
@@ -182,7 +184,8 @@ async function main(argv: string[]): Promise<number> {
           hooked(project, marker) ? "project" : hooked(user, marker) ? "user" : "no";
         const claude = cover(join(process.cwd(), ".claude", "settings.local.json"), join(homedir(), ".claude", "settings.json"), "hook claude-code");
         const cursor = cover(join(process.cwd(), ".cursor", "hooks.json"), join(homedir(), ".cursor", "hooks.json"), "hook cursor");
-        process.stdout.write(`agents:    claude-code=${claude}  cursor=${cursor}   (yenop init hooks what it detects; --agents forces a list)\n`);
+        const codex = cover(join(process.cwd(), ".codex", "hooks.json"), join(homedir(), ".codex", "hooks.json"), "hook codex");
+        process.stdout.write(`agents:    claude-code=${claude}  cursor=${cursor}  codex=${codex}   (yenop init hooks what it detects; --agents forces a list)\n`);
         return 0;
       } finally {
         y.close();
@@ -404,6 +407,11 @@ async function init(rest: string[]): Promise<number> {
     if (wanted ? wanted.includes("cursor") : cursorDetected(process.cwd())) {
       const r = installCursorHooks(cursorHooksPath(values.user ? "user" : "project", process.cwd()), hookCommandFor(cliPath, "cursor"));
       process.stdout.write(`${r.changed ? "installed" : "already installed"} Cursor hooks in ${r.path}\n`);
+    }
+    const { installCodexHooks, codexHooksPath, codexDetected } = await import("../adapters/codex/install.js");
+    if (wanted ? wanted.includes("codex") : codexDetected(process.cwd())) {
+      const r = installCodexHooks(codexHooksPath(values.user ? "user" : "project", process.cwd()), hookCommandFor(cliPath, "codex"));
+      process.stdout.write(`${r.changed ? "installed" : "already installed"} Codex hooks in ${r.path}\n`);
     }
     const { hookRuntimes } = await import("../adapters/hooks/registry.js");
     process.stdout.write(`agents Yenop can hook: ${hookRuntimes().join(", ")}\n`);

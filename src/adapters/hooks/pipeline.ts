@@ -39,6 +39,8 @@ export type HookEvent =
 export interface HookRunResult {
   stdout: string;
   exitCode: number;
+  /** Some runtimes read the reason for a block from stderr (Codex on exit 2). */
+  stderr?: string;
 }
 
 export interface HookTranslator {

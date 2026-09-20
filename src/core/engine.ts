@@ -26,21 +26,32 @@ export interface EngineDeps {
 /** Facts derived from the request so policies can stay declarative. */
 function derive(req: DecisionRequest, secretPatterns: string[]): Record<string, string | number | boolean> {
   const out: Record<string, string | number | boolean> = {};
-  const p = req.args["file_path"] ?? req.args["path"] ?? req.args["notebook_path"];
-  if (typeof p === "string") {
-    // resolve() both sides: it adds the drive on Windows for a rooted path, and collapses ".." so a path cannot
-    // walk out of the project while looking like it is inside
-    const abs = resolve(req.cwd ?? process.cwd(), p);
-    if (req.cwd) {
-      // containment is decided on normalized paths, so separators and letter case never let a write "escape"
-      const rootN = normalizePath(resolve(req.cwd), { foldCase: FS_IGNORES_CASE });
+  const primary = req.args["file_path"] ?? req.args["path"] ?? req.args["notebook_path"];
+  // A tool that touches several files at once (apply_patch, MultiEdit) lists them in args.paths. Every one is
+  // judged, and the strictest answer wins: one secret or control-plane file among ten taints the call.
+  const extra = Array.isArray(req.args["paths"]) ? (req.args["paths"] as unknown[]).filter((x): x is string => typeof x === "string") : [];
+  const all = [...(typeof primary === "string" ? [primary] : []), ...extra];
+  if (all.length === 0) return out;
+  const base = req.cwd ?? process.cwd();
+  // resolve() both sides: it adds the drive on Windows for a rooted path, and collapses ".." so a path cannot
+  // walk out of the project while looking like it is inside
+  const rootN = req.cwd ? normalizePath(resolve(req.cwd), { foldCase: FS_IGNORES_CASE }) : undefined;
+  let inside = true;
+  let secret = false;
+  let control = false;
+  for (const p of all) {
+    const abs = resolve(base, p);
+    if (rootN !== undefined) {
       const absN = normalizePath(abs, { foldCase: FS_IGNORES_CASE });
-      out["insideProject"] = absN === rootN || absN.startsWith(rootN + "/");
+      if (!(absN === rootN || absN.startsWith(rootN + "/"))) inside = false;
     }
-    out["absolutePath"] = abs;
-    out["secretPath"] = matchesSecretPattern(abs, secretPatterns);
-    out["controlPlanePath"] = isControlPlanePath(abs);
+    if (matchesSecretPattern(abs, secretPatterns)) secret = true;
+    if (isControlPlanePath(abs)) control = true;
   }
+  if (rootN !== undefined) out["insideProject"] = inside;
+  out["absolutePath"] = resolve(base, all[0]!);
+  out["secretPath"] = secret;
+  out["controlPlanePath"] = control;
   return out;
 }
 

@@ -9,7 +9,7 @@ Yenop decides which tool calls actually execute, who approved the ones that cann
 - **Spending limit:** step and deny breakers scoped to one run, not one month.
 - **Receipt:** an append-only record of every decision and the policy that made it.
 
-Status: pre-alpha. Enforcement points today: hooks for Claude Code and Cursor, and an MCP gateway that works for any MCP client. One engine, one set of policies, one receipt trail across all of them. Next: Codex CLI and Gemini CLI hooks, then adapters for the OpenAI Agents SDK, LangGraph and n8n.
+Status: pre-alpha. Enforcement points today: hooks for Claude Code, Cursor and Codex CLI, and an MCP gateway that works for any MCP client. One engine, one set of policies, one receipt trail across all of them. Next: the Gemini CLI hook, then adapters for the OpenAI Agents SDK, LangGraph and n8n.
 
 ## Install
 
@@ -48,6 +48,10 @@ Yenop only ever tightens. It never grants something Claude Code would have asked
 ## Cursor
 
 `yenop init` detects Cursor and writes its hooks into `.cursor/hooks.json` (or `~/.cursor/hooks.json` with `--user`): shell commands and MCP calls can be allowed, asked, or denied; file reads and file edits can be allowed or denied. Cursor cannot ask a person for file edits, so a step that needs one is blocked with a message rather than let through. Every hook is installed fail-closed, so a crash or timeout blocks instead of allowing. Editing `.cursor/hooks.json` through Cursor itself is treated as a change to Yenop and needs a person.
+
+## Codex CLI
+
+`yenop init` detects Codex and writes its hooks into `.codex/hooks.json` (or `~/.codex/hooks.json` with `--user`). Shell commands, `apply_patch` edits and MCP calls are judged; a patch that touches several files is judged by the strictest of them. Two things to know about Codex itself: it has no way to ask a person from a hook, so a step that would need one is blocked with a message instead; and a hook that crashes or times out is ignored by Codex, which then proceeds. Yenop answers with exit code 2 and the reason, the one signal Codex always honours, and stays fast and reliable so that the gap never opens, but it cannot change Codex's fail-open design.
 
 ## Any MCP agent: the gateway
 

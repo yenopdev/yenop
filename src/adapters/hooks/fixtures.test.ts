@@ -56,12 +56,15 @@ describe("hook fixtures replay", () => {
           const event = t!.parse(raw); // must not throw: a real event the translator cannot read is a bug
           expect(event.kind).toBe(fx.expect.kind);
           if (event.kind === "decision") {
-            const body = decideEvent(y, t!, event);
-            expect(body, "a decision must always produce an answer").not.toBeNull();
+            const body = decideEvent(y, t!, event); // null is a valid answer where allow is silence (Claude Code, Codex); Cursor always answers
             // effect is checked against the engine directly, so the fixture's expectation is about policy, not rendering
             const d = y.decide({ ...event.request, callId: `${file}:${Math.random()}` });
             if (fx.expect.effect) expect(d.effect).toBe(fx.expect.effect);
-            if (fx.expect.permission) expect((body as Record<string, unknown>)["permission"]).toBe(fx.expect.permission);
+            if (fx.expect.permission) {
+              expect(body, "an expected answer needs a body").not.toBeNull();
+              const b = body as Record<string, unknown> & { hookSpecificOutput?: { permissionDecision?: string } };
+              expect(b["permission"] ?? b.hookSpecificOutput?.permissionDecision).toBe(fx.expect.permission);
+            }
           }
         });
       }

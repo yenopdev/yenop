@@ -1,0 +1,24 @@
+{
+  "_meta": {
+    "source": "documented",
+    "note": "shape from learn.chatgpt.com/docs/hooks; replace with a recorded event. apply_patch tool_input shape (string vs {patch}) is the thing to confirm live."
+  },
+  "expect": {
+    "kind": "decision",
+    "effect": "allow"
+  },
+  "event": {
+    "session_id": "fx-cx-1",
+    "transcript_path": null,
+    "cwd": "__PROJECT__",
+    "hook_event_name": "PreToolUse",
+    "model": "x",
+    "permission_mode": "default",
+    "turn_id": "t1",
+    "tool_name": "mcp__filesystem__list_directory",
+    "tool_input": {
+      "path": "__PROJECT__"
+    },
+    "tool_use_id": "call_fx4"
+  }
+}

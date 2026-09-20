@@ -65,7 +65,7 @@ Verified means the integration surface was checked against the runtime's documen
 | MCP, stdio | gateway | **done** | any MCP client; elicitation for approvals |
 | MCP, Streamable HTTP | gateway | todo | second transport; needed for hosted tool servers |
 | Cursor | `hooks.json`: beforeShellExecution, beforeMCPExecution, beforeReadFile, preToolUse; returns allow/ask/deny; `failClosed` | **done** | shared hook pipeline; fail-closed; file edits deny-only (Cursor cannot ask there) |
-| Codex CLI | `hooks.json` PreToolUse/PostToolUse, enabled by default | verified, todo | **shell events only**; file and MCP calls go through the gateway |
+| Codex CLI | `hooks.json` PreToolUse/PostToolUse; fires for Bash, `apply_patch`, MCP tools | **done** | no ask in Codex (ask becomes deny); Codex fails open on hook failure by design; multi-file patches judged by strictest path |
 | Gemini CLI | `settings.json` BeforeTool / AfterTool with matchers | verified, todo | returns deny decisions with a reason |
 | GitHub Copilot agent | agent firewall, sandboxes; third-party hook surface unclear | verify | likely gateway-only for MCP tools |
 | OpenAI Agents SDK | tool guardrails / on-tool-start callbacks | todo | SDK adapter, TypeScript and Python |

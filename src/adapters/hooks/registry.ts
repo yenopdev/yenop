@@ -8,6 +8,7 @@ import type { HookTranslator } from "./pipeline.js";
 const LOADERS: Record<string, () => Promise<HookTranslator>> = {
   "claude-code": async () => (await import("../claude-code/hook.js")).claudeCodeTranslator,
   cursor: async () => (await import("../cursor/hook.js")).cursorTranslator,
+  codex: async () => (await import("../codex/hook.js")).codexTranslator,
 };
 
 export async function hookTranslator(runtime: string): Promise<HookTranslator | undefined> {
