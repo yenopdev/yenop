@@ -1,5 +1,5 @@
 import { uuidv7 } from "./ids.js";
-import { isAbsolute, resolve } from "node:path";
+import { resolve } from "node:path";
 import type { BudgetLimits, Decision, DecisionRequest, Effect, FlowFacts, Outcome, OutcomeReceipt, PolicyBundle, Receipt, ReceiptSink, RunStateStore, StepRecord } from "./types.js";
 import type { ShellFacts } from "./shell.js";
 import { evaluate, type EvalInput } from "./policy.js";
@@ -28,7 +28,9 @@ function derive(req: DecisionRequest, secretPatterns: string[]): Record<string, 
   const out: Record<string, string | number | boolean> = {};
   const p = req.args["file_path"] ?? req.args["path"] ?? req.args["notebook_path"];
   if (typeof p === "string") {
-    const abs = isAbsolute(p) ? p : resolve(req.cwd ?? process.cwd(), p);
+    // resolve() both sides: it adds the drive on Windows for a rooted path, and collapses ".." so a path cannot
+    // walk out of the project while looking like it is inside
+    const abs = resolve(req.cwd ?? process.cwd(), p);
     if (req.cwd) {
       // containment is decided on normalized paths, so separators and letter case never let a write "escape"
       const rootN = normalizePath(resolve(req.cwd), { foldCase: FS_IGNORES_CASE });

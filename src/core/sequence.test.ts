@@ -285,5 +285,7 @@ describe("project containment on Windows-style paths", () => {
     expect(inside.effect).toBe("allow");
     const outside = y.decide(req("win", "Edit", { file_path: `${cwd}-other/x.ts`, old_string: "a", new_string: "b" })); // a sibling that merely shares the prefix
     expect(outside.reasons).toContain("approve:writes-outside-project");
+    const traversal = y.decide(req("win", "Edit", { file_path: `${cwd}/src/../../escaped.ts`, old_string: "a", new_string: "b" })); // walks out while starting inside
+    expect(traversal.reasons).toContain("approve:writes-outside-project");
   });
 });
