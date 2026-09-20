@@ -1,6 +1,6 @@
 # Yenop
 
-**The local-first policy and audit layer for AI agents. One set of rules across every agent you run, and nothing leaves your machine.**
+**The local-first execution authorization layer for AI agents. One set of rules across the agents you run, and your agents' actions stay on your machine.**
 
 An AI agent decides what it wants to do. Yenop decides what is allowed to happen. It sits between the agent and the systems it can touch, and on every action it returns one of three answers:
 
