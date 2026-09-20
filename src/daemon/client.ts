@@ -1,12 +1,11 @@
 /**
  * Talks to the daemon. Kept dependency-free (node builtins only) so the command hook can load it in a few ms.
  */
-import { existsSync, readFileSync, openSync } from "node:fs";
+import { existsSync, readFileSync, openSync, readdirSync, statSync } from "node:fs";
 import { request as httpRequest } from "node:http";
 import { spawn } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { statSync } from "node:fs";
 
 export interface DaemonInfo {
   pid: number;
@@ -27,12 +26,31 @@ export function readDaemonInfo(home: string): DaemonInfo | undefined {
   }
 }
 
-/** Same computation as the server's, on the server's file, so client and daemon agree on "this build". */
+/**
+ * Identifies the build on disk: a fingerprint of every .js under dist/, so a change to ANY file (an adapter, a
+ * policy rule in core) counts. Client and daemon share this one function so they always agree on "current".
+ * Found the hard way: fingerprinting server.js alone let a daemon keep serving a stale adapter after a rebuild.
+ */
 export function expectedBuildId(): string {
   try {
-    const serverFile = join(dirname(fileURLToPath(import.meta.url)), "server.js");
-    const st = statSync(serverFile);
-    return `${Math.round(st.mtimeMs)}-${st.size}`;
+    const dist = join(dirname(fileURLToPath(import.meta.url)), "..");
+    let newest = 0;
+    let total = 0;
+    let count = 0;
+    const walk = (dir: string) => {
+      for (const ent of readdirSync(dir, { withFileTypes: true })) {
+        const p = join(dir, ent.name);
+        if (ent.isDirectory()) walk(p);
+        else if (ent.name.endsWith(".js")) {
+          const st = statSync(p);
+          if (st.mtimeMs > newest) newest = st.mtimeMs;
+          total += st.size;
+          count++;
+        }
+      }
+    };
+    walk(dist);
+    return `${Math.round(newest)}-${total}-${count}`;
   } catch {
     return "unknown";
   }

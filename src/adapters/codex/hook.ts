@@ -80,17 +80,18 @@ export function parseCodex(raw: string): HookEvent {
       if (name === undefined) throw new Error("PreToolUse without tool_name");
       const input = e.tool_input;
       if (PATCH_TOOL.test(name)) {
-        // apply_patch: the patch text is the input (as a string, or under a key); the files it names are the targets
-        const patch = typeof input === "string" ? input : (str(obj(input)["patch"]) ?? str(obj(input)["input"]) ?? "");
+        // apply_patch: Codex (recorded 2026-09-20, v0.155) sends the patch text as tool_input.command; older or
+        // other shapes use a bare string, or `patch` / `input`. The files the patch names are the targets.
+        const o = obj(input);
+        const patch = typeof input === "string" ? input : (str(o["command"]) ?? str(o["patch"]) ?? str(o["input"]) ?? "");
         const paths = patch ? pathsInPatch(patch) : [];
-        const single = str(obj(input)["file_path"]) ?? str(obj(input)["path"]);
+        const single = str(o["file_path"]) ?? str(o["path"]);
         const all = single ? [single, ...paths] : paths;
+        // A file edit whose targets cannot be determined must not slip past the path rules. Refuse it, loudly,
+        // rather than judge an edit of unknown files as harmless: that is exactly how the hook file got edited.
+        if (all.length === 0) throw new Error(`apply_patch with no recognizable target files (input keys: ${Object.keys(o).join(",") || typeof input})`);
         const tool: ToolRef = { name, kind: "write", readOnly: false };
-        const args: Record<string, unknown> = { ...obj(input), patch: patch.slice(0, 2000) };
-        if (all.length > 0) {
-          args["file_path"] = all[0];
-          args["paths"] = all;
-        }
+        const args: Record<string, unknown> = { ...o, patch: patch.slice(0, 2000), file_path: all[0], paths: all };
         return { kind: "decision", event, askCapable: false, request: request(e, tool, args) };
       }
       return { kind: "decision", event, askCapable: false, request: request(e, classifyTool(name), obj(input)) };

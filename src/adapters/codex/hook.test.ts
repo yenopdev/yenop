@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseCodex, codexBody, codexTranslator, pathsInPatch } from "./hook.js";
 import { runHookWith, type HookEvent } from "../hooks/pipeline.js";
-import { installCodexHooks, CODEX_REPORT_EVENTS } from "./install.js";
+import { installCodexHooks, codexHookState, CODEX_REPORT_EVENTS } from "./install.js";
 
 const base = { session_id: "s1", cwd: "/p", permission_mode: "default", turn_id: "t", model: "x", transcript_path: null };
 const ev = (name: string, fields: Record<string, unknown>) => JSON.stringify({ ...base, hook_event_name: name, ...fields });
@@ -39,6 +39,14 @@ describe("codex translator: parsing", () => {
     expect(s.request.args["paths"]).toEqual(["src/app.ts", ".codex/hooks.json"]);
     const o = decision(parseCodex(ev("PreToolUse", { tool_name: "apply_patch", tool_input: { patch: PATCH }, tool_use_id: "c4" })));
     expect(o.request.args["paths"]).toEqual(["src/app.ts", ".codex/hooks.json"]);
+  });
+  it("reads the patch from tool_input.command, which is what Codex 0.155 really sends", () => {
+    const real = decision(parseCodex(ev("PreToolUse", { tool_name: "apply_patch", tool_input: { command: "*** Begin Patch\n*** Update File: /p/.codex/hooks.json\n@@\n {\n+  \"$comment\": \"hi\",\n*** End Patch" }, tool_use_id: "exec-1" })));
+    expect(real.request.args["paths"]).toEqual(["/p/.codex/hooks.json"]);
+  });
+  it("refuses a patch whose target files it cannot determine, instead of judging it harmless", () => {
+    expect(() => parseCodex(ev("PreToolUse", { tool_name: "apply_patch", tool_input: { something_new: "x" }, tool_use_id: "c9" }))).toThrow(/no recognizable target files/);
+    expect(() => parseCodex(ev("PreToolUse", { tool_name: "apply_patch", tool_input: { command: "not a patch at all" }, tool_use_id: "c10" }))).toThrow(/no recognizable target files/);
   });
   it("keeps a plain file_path on Edit/Write-shaped inputs", () => {
     const e = decision(parseCodex(ev("PreToolUse", { tool_name: "Write", tool_input: { file_path: "/p/.env", content: "x" }, tool_use_id: "c5" })));
@@ -148,7 +156,10 @@ describe("codex installer", () => {
     expect(installCodexHooks(path, "yenop hook codex").changed).toBe(true);
     const file = JSON.parse(readFileSync(path, "utf8")) as { hooks: Record<string, { hooks: { command: string; async?: boolean; timeout: number }[] }[]> };
     expect(file.hooks["PreToolUse"]![0]!.hooks[0]).toMatchObject({ command: "yenop hook codex", timeout: 15 });
-    for (const ev of CODEX_REPORT_EVENTS) expect(file.hooks[ev]![0]!.hooks[0]).toMatchObject({ command: "yenop hook codex", async: true });
+    expect(file.hooks["PostToolUse"]![0]!.hooks[0]).toMatchObject({ command: "yenop hook codex", async: true });
+    expect(file.hooks["SessionEnd"]![0]!.hooks[0]).toMatchObject({ command: "yenop hook codex", timeout: 3 }); // Codex clamps to 3 s and runs it synchronously
+    expect(file.hooks["SessionEnd"]![0]!.hooks[0]).not.toHaveProperty("async");
+    void CODEX_REPORT_EVENTS;
     expect(installCodexHooks(path, "yenop hook codex").changed).toBe(false);
     expect(existsSync(`${path}.${process.pid}.tmp`)).toBe(false);
   });
@@ -159,5 +170,36 @@ describe("codex installer", () => {
     installCodexHooks(path, "yenop hook codex");
     const groups = JSON.parse(readFileSync(path, "utf8")).hooks.PreToolUse as { hooks: { command: string }[] }[];
     expect(groups.map((g) => g.hooks.map((h) => h.command))).toEqual([["./lint.sh"], ["yenop hook codex"]]);
+  });
+});
+
+describe("codex trust state, read from Codex's own config", () => {
+  const hooksPath = "/Users/u/proj/.codex/hooks.json";
+  const toml = (pre: string) => `[projects."/Users/u/proj"]
+trust_level = "trusted"
+
+[hooks.state]
+
+[hooks.state."${hooksPath}:pre_tool_use:0:0"]
+trusted_hash = "sha256:abc"
+${pre}
+[hooks.state."${hooksPath}:post_tool_use:0:0"]
+trusted_hash = "sha256:def"
+`;
+  it("sees a disabled PreToolUse, which means nothing is enforced on Codex", () => {
+    const dir = mkdtempSync(join(tmpdir(), "yenop-codex-cfg-"));
+    try {
+      const cfg = join(dir, "config.toml");
+      writeFileSync(cfg, toml("enabled = false\n"));
+      expect(codexHookState(hooksPath, "PreToolUse", cfg)).toBe("disabled");
+      expect(codexHookState(hooksPath, "PostToolUse", cfg)).toBe("active");
+      expect(codexHookState(hooksPath, "SessionEnd", cfg)).toBe("untrusted");
+      writeFileSync(cfg, toml(""));
+      expect(codexHookState(hooksPath, "PreToolUse", cfg)).toBe("active");
+      expect(codexHookState("/elsewhere/.codex/hooks.json", "PreToolUse", cfg)).toBe("untrusted");
+      expect(codexHookState(hooksPath, "PreToolUse", join(dir, "missing.toml"))).toBe("unknown");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

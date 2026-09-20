@@ -1,17 +1,16 @@
 {
   "_meta": {
     "source": "recorded",
-    "recordedAt": "2026-09-20T19:15:28.809Z",
+    "recordedAt": "2026-09-20T19:15:14.828Z",
     "runtime": "codex"
   },
   "expect": {
     "kind": "decision",
-    "effect": "deny",
-    "permission": "deny"
+    "effect": "allow"
   },
   "event": {
     "session_id": "01a0c03d-0a62-75c2-b51d-3c49239feee7",
-    "turn_id": "01a0c03e-a5c3-75e1-baef-54e289642e24",
+    "turn_id": "01a0c03e-637f-7511-9cba-2e67e8a6543b",
     "transcript_path": "REDACTED",
     "cwd": "__PROJECT__",
     "hook_event_name": "PreToolUse",
@@ -19,8 +18,8 @@
     "permission_mode": "default",
     "tool_name": "Bash",
     "tool_input": {
-      "command": "cat .env"
+      "command": "npm test"
     },
-    "tool_use_id": "exec-90362fac-c8f8-493d-ba22-e9893004360a"
+    "tool_use_id": "exec-dcf1aed2-93ac-42d7-9d43-5636ef966e88"
   }
 }

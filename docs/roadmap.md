@@ -65,7 +65,7 @@ Verified means the integration surface was checked against the runtime's documen
 | MCP, stdio | gateway | **done** | any MCP client; elicitation for approvals |
 | MCP, Streamable HTTP | gateway | todo | second transport; needed for hosted tool servers |
 | Cursor | `hooks.json`: beforeShellExecution, beforeMCPExecution, beforeReadFile, preToolUse; returns allow/ask/deny; `failClosed` | **done** | shared hook pipeline; fail-closed; file edits deny-only (Cursor cannot ask there) |
-| Codex CLI | `hooks.json` PreToolUse/PostToolUse; fires for Bash, `apply_patch`, MCP tools | **done** | no ask in Codex (ask becomes deny); Codex fails open on hook failure by design; multi-file patches judged by strictest path |
+| Codex CLI | `hooks.json` PreToolUse/PostToolUse; fires for Bash, `apply_patch`, MCP tools | **done, recorded live** | no ask in Codex (ask becomes deny); Codex fails open on hook failure by design; patch paths from `tool_input.command`; unrecognized patches refused; `yenop status` reads Codex's per-hook trust state |
 | Gemini CLI | `settings.json` BeforeTool / AfterTool with matchers | verified, todo | returns deny decisions with a reason |
 | GitHub Copilot agent | agent firewall, sandboxes; third-party hook surface unclear | verify | likely gateway-only for MCP tools |
 | OpenAI Agents SDK | tool guardrails / on-tool-start callbacks | todo | SDK adapter, TypeScript and Python |
@@ -126,7 +126,10 @@ Pattern: **do not try to win by parsing. Make opacity itself a signal, and catch
   as untrusted: `eval`, `base64 -d | sh`, `xxd -r`, `printf` with escape-built strings piped to an
   interpreter, nested `$(...)` beyond a depth, an interpreter reading from a pipe or a variable, `curl | sh`
   (already denied). Opaque earns an ask in the baseline and a deny in a strict profile. The attacker's
-  obfuscation becomes the reason they get caught.
+  obfuscation becomes the reason they get caught. **Shipped early (2026-09-20)** for inline interpreter code
+  (`python -c`, `node -e`, `perl -e`, `ruby -e`, `eval`) after a live Codex session routed around a blocked
+  file edit with a Python one-liner: the code is not parsed as shell, every path it names counts as touched,
+  and the baseline `opaque-code` rule asks. Decoded-blob and escape-built forms remain to do.
 - Layer 3, effects: whatever the command decodes into, exfiltration still needs the network and destruction
   still needs a destructive operation. The run-state rules (sensitive then external, untrusted then outbound)
   and the network facts catch the effect even when the text was hidden. This is why the run-level model

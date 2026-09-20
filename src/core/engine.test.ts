@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { mkdtempSync, rmSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openYenop, classifyTool, type Yenop, type DecisionRequest } from "./index.js";
+import { openYenop, classifyTool, REPLAY_WINDOW_MS, type Yenop, type DecisionRequest } from "./index.js";
 
 let home: string;
 let y: Yenop;
@@ -125,6 +125,20 @@ describe("idempotency", () => {
     expect(a.effect).toBe("ask");
     expect(b).toMatchObject({ effect: "ask", receiptId: a.receiptId, replayed: true });
     expect(y.decide(req("Read", { file_path: "/tmp/demo-project/a" }, "dup")).budget.steps).toBe(2);
+  });
+  it("forgets a replayed call id after the window, so a cached decision never outlives a rule change", () => {
+    const same = (): DecisionRequest => ({ ...req("Bash", { command: "npm test" }, "win"), callId: "same-id" });
+    const first = y.decide(same());
+    expect(y.decide(same()).replayed).toBe(true);
+    const realNow = Date.now;
+    Date.now = () => realNow() + REPLAY_WINDOW_MS + 1000;
+    try {
+      const later = y.decide(same());
+      expect(later.replayed).toBeUndefined();
+      expect(later.receiptId).not.toBe(first.receiptId);
+    } finally {
+      Date.now = realNow;
+    }
   });
   it("treats desktop-app orchestration tools as internal", () => {
     expect(y.decide(req("ScheduleWakeup", { stop: true })).effect).toBe("allow");

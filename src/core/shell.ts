@@ -53,6 +53,12 @@ export interface ShellFacts {
   controlPlane: boolean;
   /** A scanner, exploitation framework, credential attack, or a reverse-shell pattern. Dual-use: legitimate in authorized testing. */
   offensiveTool: boolean;
+  /**
+   * Part of what runs cannot be seen as a shell command: inline code handed to an interpreter (python -c,
+   * node -e, perl -e, ruby -e), a decoded blob piped to a shell, eval of a built string. Opaque code is judged
+   * by what it names (paths and hosts found in it) and otherwise treated as needing a person.
+   */
+  opaque: boolean;
 }
 
 /** Default secret-file patterns. `**` spans directories, `*` does not. A leading `!` excludes. */
@@ -91,7 +97,23 @@ export const DEFAULT_SECRET_PATTERNS: string[] = [
 ];
 
 const WRAPPERS = new Set(["sudo", "doas", "env", "nohup", "time", "command", "exec", "nice", "ionice", "caffeinate", "timeout"]);
-const INTERPRETERS = new Set(["sh", "bash", "zsh", "dash", "ksh", "fish", "python", "python3", "perl", "ruby", "node"]);
+const SHELLS = new Set(["sh", "bash", "zsh", "dash", "ksh", "fish"]);
+const INTERPRETERS = new Set([...SHELLS, "python", "python3", "perl", "ruby", "node"]);
+
+/**
+ * Path-like strings inside opaque code: anything quoted that looks like a path, plus bare tokens with a
+ * slash or a leading dot-directory. This does not understand the language; it does not need to. If the code
+ * names a protected file, that is enough to treat the file as touched. A false positive costs a question; a
+ * miss costs a bypass.
+ */
+export function pathsMentioned(code: string): string[] {
+  const out = new Set<string>();
+  for (const m of code.matchAll(/["'`]([^"'`\n]{1,300})["'`]/g)) {
+    const s = m[1]!.trim();
+    if (/^(~|\.{1,2}\/|\/|[A-Za-z]:[\\/])/.test(s) || /^\.[A-Za-z][^\s]*(\/|$)/.test(s) || /^[\w.-]+\/[\w./-]+$/.test(s)) out.add(s);
+  }
+  return [...out];
+}
 const NETWORK = new Set(["curl", "wget", "ssh", "scp", "sftp", "rsync", "nc", "ncat", "netcat", "telnet", "ftp", "http", "https"]);
 const SUBCOMMAND_TOOLS = new Set(["git", "terraform", "pulumi", "kubectl", "helm", "docker", "docker-compose", "aws", "gcloud", "az", "npm", "pnpm", "yarn", "gh", "systemctl", "brew", "apt", "apt-get", "pip", "pip3", "cargo", "go", "make", "psql", "mysql", "redis-cli", "mongo", "mongosh", "flyctl", "fly", "vercel", "heroku", "supabase", "railway"]);
 const CLOUD_CLIS = new Set(["aws", "gcloud", "az", "flyctl", "fly", "heroku", "vercel", "supabase", "railway", "doctl", "linode-cli"]);
@@ -516,6 +538,7 @@ export function analyzeShell(command: string, opts: { secretPatterns?: string[];
   let sensitiveRead = false;
   let controlPlane = false;
   let offensiveTool = looksLikeReverseShell(command);
+  let opaque = false;
   let hostUnknown = false;
 
   // env refs and SQL from every argument, including quoted strings
@@ -578,15 +601,31 @@ export function analyzeShell(command: string, opts: { secretPatterns?: string[];
       if (positional.length === 0 || (positional.length === 1 && positional[0] === "-")) pipesToShell = true;
     }
     // `bash -c "..."`, `sh -c '...'`: analyze the inner command too
-    if (INTERPRETERS.has(prog)) {
+    if (SHELLS.has(prog)) {
+      // `bash -c "..."`: the inner text IS shell, so parse it as such
       const ci = args.indexOf("-c");
       if (ci !== -1 && args[ci + 1]) {
         for (const inner of parseCommands(args[ci + 1]!).commands) visit(inner);
       }
-      if (prog === "python" || prog === "python3" || prog === "node" || prog === "perl" || prog === "ruby") {
-        if (args.includes("-c") || args.includes("-e")) ops.add(`${prog}:inline`);
+      if (args.some((a) => a === "eval")) opaque = true;
+    } else if (INTERPRETERS.has(prog)) {
+      // `python3 -c '...'`, `node -e '...'`: the inner text is a program in another language. It is NOT shell,
+      // so it must not be parsed as shell (that produced garbage "programs" and hid the real target). It is
+      // opaque: we cannot know what it does, but we can see what it names. Every protected path or host it
+      // mentions counts as touched, and the call is flagged so policy can require a person.
+      const idx = args.findIndex((a) => a === "-c" || a === "-e" || a === "--eval" || a === "-p");
+      if (idx !== -1 && args[idx + 1] !== undefined) {
+        opaque = true;
+        ops.add(`${prog}:inline`);
+        for (const ref of pathsMentioned(args[idx + 1]!)) {
+          const p = expandHome(ref, home);
+          paths.add(p);
+          // opaque code that names a guard file may do anything to it; a read-only viewer exemption does not apply
+          if (isControlPlanePath(p)) controlPlane = true;
+        }
       }
     }
+    if (prog === "eval") opaque = true;
     if (prog === "xargs" && args.length) {
       // skip xargs's own options (and the value of -I / -n / -P), then the rest is the command
       let k = 0;
@@ -779,5 +818,6 @@ export function analyzeShell(command: string, opts: { secretPatterns?: string[];
     destructive,
     controlPlane,
     offensiveTool,
+    opaque,
   };
 }

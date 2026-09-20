@@ -55,9 +55,34 @@ export function installCodexHooks(path: string, command: string): { changed: boo
     else groups.push({ hooks: [hook] }); // no matcher: every tool
   };
   put(CODEX_DECISION_EVENT, { type: "command", command, timeout: 15, statusMessage: "Yenop is checking this action" });
-  for (const ev of CODEX_REPORT_EVENTS) put(ev, { type: "command", command, timeout: 5, async: true });
+  put("PostToolUse", { type: "command", command, timeout: 5, async: true });
+  // Codex runs SessionEnd synchronously and clamps its timeout to 3 s; writing anything else earns a warning on every start
+  put("SessionEnd", { type: "command", command, timeout: 3 });
   const after = JSON.stringify(file);
   if (after === before) return { changed: false, path };
   writeAtomic(path, JSON.stringify(file, null, 2) + "\n");
   return { changed: true, path };
+}
+
+/**
+ * Codex decides per hook whether it is trusted and enabled, and writes that into ~/.codex/config.toml as
+ * [hooks.state."<file>:<event>:<i>:<j>"] with trusted_hash and an optional `enabled = false`. A hook that is
+ * untrusted or disabled never runs, and a disabled PreToolUse means Yenop is not enforcing on Codex at all,
+ * silently. This reads that state so `yenop status` can say so. Found in the first live Codex session, where
+ * PreToolUse was left disabled while the two report hooks ran.
+ */
+export type CodexHookState = "active" | "disabled" | "untrusted" | "unknown";
+export function codexHookState(hooksPath: string, event: "PreToolUse" | "PostToolUse" | "SessionEnd", configPath = join(homedir(), ".codex", "config.toml")): CodexHookState {
+  if (!existsSync(configPath)) return "unknown";
+  const snake = event.replace(/([a-z])([A-Z])/g, "$1_$2").toLowerCase();
+  const key = `${hooksPath}:${snake}:`;
+  const text = readFileSync(configPath, "utf8");
+  // find the [hooks.state."<key>..."] table for this file+event and read its body
+  const re = new RegExp(`\\[hooks\\.state\\."${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}[^"]*"\\]([^[]*)`);
+  const m = re.exec(text);
+  if (!m) return "untrusted";
+  const body = m[1] ?? "";
+  if (/^\s*enabled\s*=\s*false/m.test(body)) return "disabled";
+  if (/trusted_hash\s*=/.test(body)) return "active";
+  return "untrusted";
 }

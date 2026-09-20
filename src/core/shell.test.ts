@@ -147,3 +147,36 @@ describe("Windows shells", () => {
     expect(a(String.raw`echo a\ b`).programs).toEqual(["echo"]); // a POSIX escaped space is still an escape
   });
 });
+
+describe("opaque code: inline programs handed to an interpreter", () => {
+  it("sees the file an inline python program names, and marks the call opaque", () => {
+    // the exact command a live Codex used to route around a blocked file edit (2026-09-20)
+    const f = a(`python3 -c 'from pathlib import Path; p = Path(".codex/hooks.json"); s = p.read_text(); p.write_text("// hi from codex\\n" + s)'`);
+    expect(f.opaque).toBe(true);
+    expect(f.ops).toContain("python3:inline");
+    expect(f.paths).toContain(".codex/hooks.json");
+    expect(f.controlPlane).toBe(true);
+    expect(f.programs).toEqual(["python3"]); // the program's text is not shell and must not be parsed as shell
+  });
+  it("catches a secret named inside node, perl and ruby one-liners", () => {
+    expect(a(`node -e 'require("fs").readFileSync(".env","utf8")'`).secretPath).toBe(true);
+    expect(a(`perl -e 'open(F,"<","/home/u/.ssh/id_rsa")'`).secretPath).toBe(true);
+    expect(a(`ruby -e 'puts File.read("~/.aws/credentials")'`).secretPath).toBe(true);
+    for (const c of [`node -e 'console.log(1)'`, `python3 -c 'print(2+2)'`]) {
+      const f = a(c);
+      expect(f.opaque).toBe(true);
+      expect(f.secretPath).toBe(false);
+      expect(f.controlPlane).toBe(false);
+    }
+  });
+  it("still parses bash -c as shell, and flags eval as opaque", () => {
+    expect(a(`bash -c 'cat .env'`).secretPath).toBe(true);
+    expect(a(`bash -c 'ls'`).opaque).toBe(false);
+    expect(a(`eval "$CMD"`).opaque).toBe(true);
+    expect(a(`bash -c 'eval $X'`).opaque).toBe(true);
+  });
+  it("does not flag a script file run by an interpreter, only inline code", () => {
+    expect(a("python3 scripts/build.py").opaque).toBe(false);
+    expect(a("node dist/cli.js --help").opaque).toBe(false);
+  });
+});

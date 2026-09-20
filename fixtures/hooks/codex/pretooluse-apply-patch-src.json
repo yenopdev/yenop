@@ -1,17 +1,16 @@
 {
   "_meta": {
     "source": "recorded",
-    "recordedAt": "2026-09-20T19:17:48.602Z",
+    "recordedAt": "2026-09-20T19:17:01.273Z",
     "runtime": "codex"
   },
   "expect": {
     "kind": "decision",
-    "effect": "ask",
-    "permission": "deny"
+    "effect": "allow"
   },
   "event": {
     "session_id": "01a0c03d-0a62-75c2-b51d-3c49239feee7",
-    "turn_id": "01a0c040-b257-7771-b2e2-f5c515c7e932",
+    "turn_id": "01a0c040-056b-70a1-adaa-2971a525fcba",
     "transcript_path": "REDACTED",
     "cwd": "__PROJECT__",
     "hook_event_name": "PreToolUse",
@@ -19,8 +18,8 @@
     "permission_mode": "default",
     "tool_name": "apply_patch",
     "tool_input": {
-      "command": "*** Begin Patch\n*** Update File: __PROJECT__/.codex/hooks.json\n@@\n {\n+  \"$comment\": \"hi from codex\",\n   \"hooks\": {\n*** End Patch"
+      "command": "*** Begin Patch\n*** Update File: __PROJECT__/src/app.js\n@@\n+// Print a greeting from the playground.\n console.log('hello from the playground');\n*** End Patch"
     },
-    "tool_use_id": "exec-5b295546-cfa5-41b9-9b8a-b8a42331521a"
+    "tool_use_id": "exec-245112be-e643-4072-821d-7d1b9c002db9"
   }
 }

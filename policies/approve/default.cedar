@@ -25,6 +25,13 @@ when {
   (resource.kind == "write" && context.derived has controlPlanePath && context.derived.controlPlanePath)
 };
 
+// Code Yenop cannot read: inline programs handed to an interpreter (python -c, node -e), eval, decoded blobs.
+// The parser judges what such code names, but not what it does, so a person looks. Teams that script this way
+// routinely can disable it, or allow specific programs in their own policies.
+@id("opaque-code")
+permit (principal, action == Yenop::Action::"call", resource)
+when { context has shell && context.shell.opaque };
+
 // Offensive security tooling: scanners, exploitation frameworks, credential attacks, reverse shells.
 // Dual-use, so a person signs off rather than an outright refusal. A pentest team that runs these daily
 // disables this with "disabledPolicies": ["offensive-tooling"], or tightens it to a forbid.

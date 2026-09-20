@@ -17,7 +17,7 @@ export { uuidv7, uuidv7Time, newTenantId } from "./ids.js";
 export { analyzeShell, matchesSecretPattern, isInternalHost, isControlPlanePath, DEFAULT_SECRET_PATTERNS, type ShellFacts } from "./shell.js";
 export { loadSchema, validateAgainstSchema } from "./policy.js";
 export { CONFIG_VERSION, resolveTenant, localTenantId } from "./config.js";
-export { STATE_VERSION } from "./state.js";
+export { STATE_VERSION, REPLAY_WINDOW_MS } from "./state.js";
 export { SqliteRunState, MemoryRunState } from "./state.js";
 export { JsonlReceipts, NullReceipts, readReceipts, readAllReceipts, answersFor, isOutcome, summarizeCall } from "./receipts.js";
 

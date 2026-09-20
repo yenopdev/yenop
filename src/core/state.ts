@@ -28,6 +28,9 @@ const toStep = (r: StepRow): StepRecord => {
 };
 
 /** Schema version of the local state database, stored in PRAGMA user_version. 2 added run facts, 3 the step history. */
+/** How long a repeated call id returns the earlier decision. Long enough for a double-fired hook, far too short to outlive a rebuild. */
+export const REPLAY_WINDOW_MS = 30_000;
+
 export const STATE_VERSION = 3;
 
 interface Row {
@@ -126,12 +129,17 @@ export class SqliteRunState implements RunStateStore {
       RETURNING steps, denies, asks, untrusted, sensitive, outbound, destructive
     `);
     this.peekStmt = this.db.prepare(`SELECT steps, denies, asks, untrusted, sensitive, outbound, destructive FROM runs WHERE tenant = ? AND run_id = ?`);
-    this.recallStmt = this.db.prepare(`SELECT decision FROM calls WHERE tenant = ? AND run_id = ? AND call_id = ?`);
+    // A repeated call id is replayed only within a short window. The reason idempotency exists is the desktop
+    // app firing a hook twice within a second; a decision remembered for longer would outlive the rules or the
+    // build that made it, and a stale "allow" is a bypass. Found when a security fix appeared not to work
+    // because the recorded call ids replayed an hour-old allow.
+    this.recallStmt = this.db.prepare(`SELECT decision FROM calls WHERE tenant = ? AND run_id = ? AND call_id = ? AND at > ?`);
     this.rememberStmt = this.db.prepare(`INSERT OR IGNORE INTO calls (tenant, run_id, call_id, decision, at) VALUES (?, ?, ?, ?, ?)`);
   }
 
   recallCall(tenant: string, runId: string, callId: string): Decision | undefined {
-    const row = this.recallStmt.get(tenant, runId, callId) as { decision: string } | undefined;
+    const cutoff = new Date(Date.now() - REPLAY_WINDOW_MS).toISOString();
+    const row = this.recallStmt.get(tenant, runId, callId, cutoff) as { decision: string } | undefined;
     return row ? (JSON.parse(row.decision) as Decision) : undefined;
   }
 
@@ -245,12 +253,13 @@ export class MemoryRunState implements RunStateStore {
     s.outcome = outcome;
     return { ...s };
   }
-  private calls = new Map<string, Decision>();
+  private calls = new Map<string, { decision: Decision; at: number }>();
   recallCall(tenant: string, runId: string, callId: string): Decision | undefined {
-    return this.calls.get(`${tenant}\u0000${runId}\u0000${callId}`);
+    const hit = this.calls.get(`${tenant}\u0000${runId}\u0000${callId}`);
+    return hit && Date.now() - hit.at <= REPLAY_WINDOW_MS ? hit.decision : undefined;
   }
   rememberCall(tenant: string, runId: string, callId: string, decision: Decision): void {
-    this.calls.set(`${tenant}\u0000${runId}\u0000${callId}`, decision);
+    this.calls.set(`${tenant}\u0000${runId}\u0000${callId}`, { decision, at: Date.now() });
   }
   close(): void {}
 }

@@ -100,8 +100,12 @@ For each agent, on a fresh project with `yenop init` (enforce mode, playground i
 | record fixtures for every event seen | `YENOP_RECORD_HOOKS` set | same | same; an `apply_patch` event is the one to capture | |
 
 Open items to verify live: Cursor's built-in tool names in `preToolUse` (the adapter matches by pattern);
-Codex's `apply_patch` tool_input shape (string or `{patch}`); Gemini's `BeforeTool` payload. Fill the empty
-column as the Gemini adapter lands.
+Gemini's `BeforeTool` payload. Codex is recorded (2026-09-20): all its fixtures are real events.
+
+Lesson from the first Codex session, now a rule: **when replaying a recorded event by hand, use a fresh
+`tool_use_id`**, or the engine's idempotency will return the decision it made when the event was first seen
+(bounded to 30 s now, but still). And after any rebuild, confirm `yenop daemon status` shows a new pid before
+trusting a live result.
 
 Windows: run the same table on the Windows PC. Expect the service integration to be absent (documented) and
 the command hook to work; anything else that differs is a bug to file.

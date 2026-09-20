@@ -184,8 +184,16 @@ async function main(argv: string[]): Promise<number> {
           hooked(project, marker) ? "project" : hooked(user, marker) ? "user" : "no";
         const claude = cover(join(process.cwd(), ".claude", "settings.local.json"), join(homedir(), ".claude", "settings.json"), "hook claude-code");
         const cursor = cover(join(process.cwd(), ".cursor", "hooks.json"), join(homedir(), ".cursor", "hooks.json"), "hook cursor");
-        const codex = cover(join(process.cwd(), ".codex", "hooks.json"), join(homedir(), ".codex", "hooks.json"), "hook codex");
+        const codexPath = hooked(join(process.cwd(), ".codex", "hooks.json"), "hook codex") ? join(process.cwd(), ".codex", "hooks.json") : hooked(join(homedir(), ".codex", "hooks.json"), "hook codex") ? join(homedir(), ".codex", "hooks.json") : undefined;
+        const codex = codexPath === undefined ? "no" : codexPath.startsWith(homedir() + "/.codex") ? "user" : "project";
         process.stdout.write(`agents:    claude-code=${claude}  cursor=${cursor}  codex=${codex}   (yenop init hooks what it detects; --agents forces a list)\n`);
+        if (codexPath !== undefined) {
+          // Codex keeps its own per-hook trust switch. Installed is not the same as running.
+          const { codexHookState } = await import("../adapters/codex/install.js");
+          const pre = codexHookState(codexPath, "PreToolUse");
+          if (pre === "disabled") process.stdout.write(`WARNING:   Codex has the Yenop PreToolUse hook DISABLED, so nothing is enforced on Codex. In Codex run /hooks and enable it.\n`);
+          else if (pre === "untrusted") process.stdout.write(`WARNING:   Codex has not trusted the Yenop hooks yet. Start Codex in this project and choose "Trust all"; until then nothing is enforced on Codex.\n`);
+        }
         return 0;
       } finally {
         y.close();
@@ -412,6 +420,7 @@ async function init(rest: string[]): Promise<number> {
     if (wanted ? wanted.includes("codex") : codexDetected(process.cwd())) {
       const r = installCodexHooks(codexHooksPath(values.user ? "user" : "project", process.cwd()), hookCommandFor(cliPath, "codex"));
       process.stdout.write(`${r.changed ? "installed" : "already installed"} Codex hooks in ${r.path}\n`);
+      process.stdout.write(`           Codex will ask you to review new hooks on its next start: choose "Trust all". A hook Codex has not trusted, or has disabled, never runs; "yenop status" checks.\n`);
     }
     const { hookRuntimes } = await import("../adapters/hooks/registry.js");
     process.stdout.write(`agents Yenop can hook: ${hookRuntimes().join(", ")}\n`);

@@ -1,24 +1,25 @@
 {
   "_meta": {
-    "source": "documented",
-    "note": "shape from learn.chatgpt.com/docs/hooks; replace with a recorded event. apply_patch tool_input shape (string vs {patch}) is the thing to confirm live."
+    "source": "recorded",
+    "recordedAt": "2026-09-20T19:15:15.091Z",
+    "runtime": "codex"
   },
   "expect": {
     "kind": "outcome"
   },
   "event": {
-    "session_id": "fx-cx-1",
-    "transcript_path": null,
+    "session_id": "01a0c03d-0a62-75c2-b51d-3c49239feee7",
+    "turn_id": "01a0c03e-637f-7511-9cba-2e67e8a6543b",
+    "transcript_path": "REDACTED",
     "cwd": "__PROJECT__",
     "hook_event_name": "PostToolUse",
-    "model": "x",
+    "model": "gpt-6-astra",
     "permission_mode": "default",
-    "turn_id": "t1",
     "tool_name": "Bash",
     "tool_input": {
       "command": "npm test"
     },
     "tool_response": "REDACTED",
-    "tool_use_id": "call_fx1"
+    "tool_use_id": "exec-dcf1aed2-93ac-42d7-9d43-5636ef966e88"
   }
 }

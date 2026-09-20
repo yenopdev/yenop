@@ -289,3 +289,15 @@ describe("project containment on Windows-style paths", () => {
     expect(traversal.reasons).toContain("approve:writes-outside-project");
   });
 });
+
+describe("opaque code needs a person", () => {
+  it("asks before an inline program, and names the guard file it would touch", () => {
+    const d = y.decide(req("op", "Bash", { command: `python3 -c 'from pathlib import Path; p = Path(".codex/hooks.json"); p.write_text("x")'` }));
+    expect(d.effect).toBe("ask");
+    expect(d.reasons).toContain("approve:opaque-code");
+    expect(d.reasons).toContain("approve:changes-to-yenop-itself");
+    const plain = y.decide(req("op", "Bash", { command: `python3 -c 'print(1)'` }));
+    expect(plain.effect).toBe("ask");
+    expect(plain.reasons).toContain("approve:opaque-code");
+  });
+});

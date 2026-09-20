@@ -12,9 +12,10 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, writeFileSync, appendFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { openYenop, type Yenop, type DecisionRequest } from "../core/index.js";
+import { expectedBuildId } from "./client.js";
 import { hookTranslator } from "../adapters/hooks/registry.js";
 import { decideEvent } from "../adapters/hooks/pipeline.js";
 
@@ -37,15 +38,9 @@ export function daemonInfoPath(home: string): string {
   return join(home, "daemon.json");
 }
 
-/** Identifies this build. A daemon whose buildId differs from the client's is restarted. */
+/** Identifies this build. Shared with the client so both sides agree; see expectedBuildId. */
 export function currentBuildId(): string {
-  try {
-    const self = fileURLToPath(import.meta.url);
-    const st = statSync(self);
-    return `${Math.round(st.mtimeMs)}-${st.size}`;
-  } catch {
-    return "unknown";
-  }
+  return expectedBuildId();
 }
 
 /**

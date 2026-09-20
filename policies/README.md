@@ -38,7 +38,7 @@ Every policy carries an `@id("...")`. Ids must be unique across layers; a duplic
 | `context.derived.absolutePath` | the resolved file argument |
 | `context.derived.secretPath` | true when the file argument matches a secret-file pattern |
 | `context.derived.controlPlanePath` | true when the file argument is one of Yenop's own files or a Claude Code settings file |
-| `context.shell` | present for shell tools: `programs`, `ops`, `paths`, `envRefs`, `sql`, `hosts` (sets), `commandCount`, and the booleans `heredoc`, `sudo`, `pipesToShell`, `secretPath`, `secretEnv`, `network`, `externalNetwork`, `download`, `sensitiveRead`, `outbound`, `destructive`, `controlPlane`, `offensiveTool` |
+| `context.shell` | present for shell tools: `programs`, `ops`, `paths`, `envRefs`, `sql`, `hosts` (sets), `commandCount`, and the booleans `heredoc`, `sudo`, `pipesToShell`, `secretPath`, `secretEnv`, `network`, `externalNetwork`, `download`, `sensitiveRead`, `outbound`, `destructive`, `controlPlane`, `offensiveTool`, `opaque` |
 | `context.call` | the call as an entity; every tool argument is a string tag: `context.call.hasTag("repo") && context.call.getTag("repo") == "acme/prod"` |
 
 Test `context has shell` before using shell facts. The full vocabulary is `schema.cedarschema` next to this file; policies that do not match it are rejected at load with a message naming the attribute.
