@@ -136,6 +136,9 @@ Pattern: **do not try to win by parsing. Make opacity itself a signal, and catch
   one of four.
 - A regression corpus: every bypass found, in testing or in the wild, becomes a test case. The parser's job is
   to never regress on a known trick, not to predict every future one.
+- A Windows dialect: PowerShell and cmd do not use backslash escapes, quote differently, and pass paths as
+  `-Path` arguments. Windows paths are recognized today; the dialects are not. Until they are, Windows is not
+  supported for the shell surface (file, MCP and path checks already work there).
 
 Done when: the obfuscation corpus (eval, base64, printf-escapes, nested substitution, variable-built
 commands, interpreter-from-pipe) is entirely classified opaque or caught by effect, and the corpus is

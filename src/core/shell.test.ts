@@ -122,3 +122,28 @@ describe("control-plane paths cover every hooked runtime", () => {
     for (const p of ["/p/.cursor/rules/x.mdc", "/p/src/hooks.json", "/p/.geminirc"]) expect(isControlPlanePath(p), p).toBe(false);
   });
 });
+
+describe("paths from Windows and case-insensitive filesystems", () => {
+  it("matches secret files written with backslashes, as the first Windows CI run showed they were not", () => {
+    for (const p of ["D:\\proj\\.env", "C:\\Users\\u\\.ssh\\id_rsa", "D:\\proj\\infra\\keys\\id_ed25519", "D:\\proj\\app.pem"]) expect(matchesSecretPattern(p), p).toBe(true);
+    expect(matchesSecretPattern("D:\\proj\\.env.example")).toBe(false);
+  });
+  it("treats letter case as irrelevant, because NTFS and default APFS do", () => {
+    for (const p of ["/p/.ENV", "/home/u/.SSH/ID_RSA", "D:\\proj\\.Env", "/p/Cert.PEM"]) expect(matchesSecretPattern(p), p).toBe(true);
+  });
+  it("protects the hook and policy files under any separator or case", () => {
+    for (const p of ["D:\\proj\\.cursor\\hooks.json", "D:\\proj\\.yenop\\config.json", "C:\\Users\\u\\.claude\\settings.json", "/p/.CURSOR/hooks.json", "D:\\proj\\.codex\\config.toml"]) expect(isControlPlanePath(p), p).toBe(true);
+  });
+});
+
+describe("Windows shells", () => {
+  it("catches a secret read through a drive-letter path or a PowerShell reader", () => {
+    expect(a('type "D:\\proj\\.env"').secretPath).toBe(true);
+    expect(a('Get-Content "C:\\Users\\u\\.ssh\\id_rsa"').secretPath).toBe(true);
+    expect(a("type .env").secretPath).toBe(true);
+    expect(a(String.raw`type D:\proj\.env`).secretPath).toBe(true); // unquoted, as cmd sends it
+    expect(a(String.raw`Get-Content .\secrets\id_rsa`).secretPath).toBe(true); // relative Windows path
+    expect(a("Get-Content src/app.ts").secretPath).toBe(false);
+    expect(a(String.raw`echo a\ b`).programs).toEqual(["echo"]); // a POSIX escaped space is still an escape
+  });
+});

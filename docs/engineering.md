@@ -12,6 +12,12 @@
 - Policies are layered: baseline (shipped, in `policies/`), home (`~/.yenop/policies`), project (`<repo>/.yenop/policies`), plus `disabledPolicies` in config. Init never copies the baseline; users never edit shipped files.
 - Every policy has an `@id`. Evaluation errors fail closed. The Claude Code adapter only tightens: it prints nothing on allow.
 
+## Paths
+- Every path that reaches a security check goes through `normalizePath` (`src/core/shell.ts`): backslashes become slashes and case is folded. The first Windows CI run (2026-09-20) showed `D:\proj\.env` was readable and `.cursor\hooks.json` editable because nothing matched backslashes; case folding also closes `.ENV` on NTFS and default APFS, which are case-insensitive.
+- Secret-file and control-plane matching fold case everywhere (a false positive on Linux is harmless). Project containment folds case only where the filesystem does (`FS_IGNORES_CASE`: win32, darwin), because folding on a case-sensitive filesystem would loosen the check.
+- The shell tokenizer is POSIX, with one Windows rule: a word that begins like a drive path (`D:\`) or a relative one (`.\`, `..\`) keeps its backslashes literal; POSIX never starts a word that way. PowerShell and cmd syntax beyond paths (their operators, quoting, `-Path` arguments) is not parsed yet; Windows stays "not supported" for the shell surface until it is, and `docs/on-prem.md` says so.
+- `type`, `Get-Content`, `gc`, `select-string`, `dir`, `Get-ChildItem` count as viewers.
+
 ## Testing
 - `docs/test-plan.md` is the authority. CI (`.github/workflows/ci.yml`) runs the suite on macOS, Ubuntu and Windows, proves the air-gapped install in a `--network none` container, and runs the suite on Rocky Linux 9.
 - Timing assertions multiply their budget by `YENOP_CI_PERF_FACTOR` (set to 4 in CI). Never loosen a local gate to make CI pass; set the factor.

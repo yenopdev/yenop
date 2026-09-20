@@ -1,10 +1,10 @@
 import { uuidv7 } from "./ids.js";
-import { isAbsolute, resolve, sep } from "node:path";
+import { isAbsolute, resolve } from "node:path";
 import type { BudgetLimits, Decision, DecisionRequest, Effect, FlowFacts, Outcome, OutcomeReceipt, PolicyBundle, Receipt, ReceiptSink, RunStateStore, StepRecord } from "./types.js";
 import type { ShellFacts } from "./shell.js";
 import { evaluate, type EvalInput } from "./policy.js";
 import { summarizeCall, trimForReceipt } from "./receipts.js";
-import { analyzeShell, isControlPlanePath, isInternalHost, matchesSecretPattern } from "./shell.js";
+import { analyzeShell, isControlPlanePath, isInternalHost, matchesSecretPattern, normalizePath, FS_IGNORES_CASE } from "./shell.js";
 import { RECEIPT_VERSION } from "./types.js";
 
 export interface EngineDeps {
@@ -30,8 +30,10 @@ function derive(req: DecisionRequest, secretPatterns: string[]): Record<string, 
   if (typeof p === "string") {
     const abs = isAbsolute(p) ? p : resolve(req.cwd ?? process.cwd(), p);
     if (req.cwd) {
-      const root = resolve(req.cwd) + sep;
-      out["insideProject"] = abs === resolve(req.cwd) || abs.startsWith(root);
+      // containment is decided on normalized paths, so separators and letter case never let a write "escape"
+      const rootN = normalizePath(resolve(req.cwd), { foldCase: FS_IGNORES_CASE });
+      const absN = normalizePath(abs, { foldCase: FS_IGNORES_CASE });
+      out["insideProject"] = absN === rootN || absN.startsWith(rootN + "/");
     }
     out["absolutePath"] = abs;
     out["secretPath"] = matchesSecretPattern(abs, secretPatterns);

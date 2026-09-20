@@ -51,7 +51,8 @@ describe("hook fixtures replay", () => {
           const t = await hookTranslator(runtime);
           expect(t).toBeDefined();
           const fx = JSON.parse(readFileSync(join(root, runtime, file), "utf8")) as Fixture;
-          const raw = JSON.stringify(fx.event).split("__PROJECT__").join(project);
+          // the placeholder lives inside JSON strings, so the replacement must be JSON-escaped (Windows paths have backslashes)
+          const raw = JSON.stringify(fx.event).split("__PROJECT__").join(JSON.stringify(project).slice(1, -1));
           const event = t!.parse(raw); // must not throw: a real event the translator cannot read is a bug
           expect(event.kind).toBe(fx.expect.kind);
           if (event.kind === "decision") {

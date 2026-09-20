@@ -277,3 +277,13 @@ describe("offensive tooling", () => {
     expect(d.reasons).toContain("approve:offensive-tooling");
   });
 });
+
+describe("project containment on Windows-style paths", () => {
+  it("keeps a write inside the project inside it, and outside outside it, whatever the separator or case", () => {
+    // driven through the engine: an edit under the project is allowed, one beside it asks
+    const inside = y.decide(req("win", "Edit", { file_path: `${cwd}/src/App.ts`, old_string: "a", new_string: "b" }));
+    expect(inside.effect).toBe("allow");
+    const outside = y.decide(req("win", "Edit", { file_path: `${cwd}-other/x.ts`, old_string: "a", new_string: "b" })); // a sibling that merely shares the prefix
+    expect(outside.reasons).toContain("approve:writes-outside-project");
+  });
+});

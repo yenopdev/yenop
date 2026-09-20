@@ -55,7 +55,7 @@ For a system-wide service that runs as a service account instead of per-user, in
 
 - **macOS**: supported and verified, including the supervised service.
 - **Linux**: supported. The systemd unit is generated and validated; verify the supervised service on your distribution during the pilot, since we test the unit's contents but cannot test every init setup for you. The command hook and the CLI work anywhere Node runs.
-- **Windows**: not supported yet. The service integration is absent and the hook is untested there. Do not deploy Yenop on Windows agents until this lands. If you need it, tell us; it moves up the list with a customer asking.
+- **Windows**: not supported yet. The test suite runs on Windows in CI and file, MCP and path checks work there, but the shell parser understands POSIX shells and only Windows *paths*, not PowerShell or cmd syntax, and there is no service integration. Do not rely on Yenop for Windows shell commands until that lands. If you need it, tell us; it moves up the list with a customer asking.
 
 ## Sending receipts to your SIEM
 

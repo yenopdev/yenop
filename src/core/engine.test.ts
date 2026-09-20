@@ -104,7 +104,7 @@ describe("circuit breakers", () => {
     expect(d.reasons).toEqual(["breaker:max-denies"]);
   });
   it("counts steps per run and stops at the cap", () => {
-    const tiny = openYenop({ home: join(home, "tiny"), cwd });
+    const tiny = openYenop({ home: join(home, "tiny"), cwd, dryRun: true }); // in-memory state: this tests the breaker, not the disk (1000 writes took 12 s on a Windows runner)
     try {
       // default cap is 1000; simulate by driving a run to the limit through the store directly
       for (let i = 0; i < 1000; i++) tiny.decide(req("Read", { file_path: "/tmp/demo-project/a" }, "long"));

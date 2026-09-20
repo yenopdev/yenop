@@ -22,9 +22,9 @@ describe("service plan", () => {
     expect(p.platform).toBe("linux");
     expect(tail(p.unitPath, 3)).toEqual(["systemd", "user", "yenop.service"]);
     expect(p.unit).toMatch(/^\[Unit\]/m);
-    expect(p.unit).toMatch(/ExecStart=\/.*node.* .*daemon run/); // absolute node path, ends in daemon run
+    expect(p.unit).toMatch(/ExecStart=.*node.* .*daemon run/); // node plus the CLI, ending in "daemon run" (absoluteness is host-specific)
     expect(p.unit).toContain("Environment=YENOP_HOME=/var/lib/yenop");
-    expect(p.unit).toMatch(/Environment=PATH=\/.*:\/usr\/bin:\/bin/);
+    expect(p.unit).toMatch(/Environment=PATH=.*:\/usr\/bin:\/bin/);
     expect(p.unit).toContain("Restart=always");
     expect(p.unit).toContain("WantedBy=default.target");
   });

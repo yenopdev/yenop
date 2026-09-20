@@ -146,9 +146,10 @@ const CONTROL_PLANE = [
   /(^|\/)\.gemini\/settings\.json$/,
 ];
 export function isControlPlanePath(p: string): boolean {
-  return CONTROL_PLANE.some((re) => re.test(p));
+  const norm = normalizePath(p);
+  return CONTROL_PLANE.some((re) => re.test(norm));
 }
-const VIEWERS = new Set(["cat", "less", "more", "head", "tail", "grep", "rg", "ls", "wc", "stat", "file", "diff", "bat", "jq", "find", "tree", "du", "cd", "test", "["]);
+const VIEWERS = new Set(["cat", "less", "more", "head", "tail", "grep", "rg", "ls", "wc", "stat", "file", "diff", "bat", "jq", "find", "tree", "du", "cd", "test", "[", "type", "get-content", "gc", "select-string", "dir", "get-childitem"]);
 
 /** Loopback, link-local, private ranges, and names that never leave the machine or the LAN. */
 export function isInternalHost(host: string): boolean {
@@ -169,6 +170,22 @@ function hostsIn(arg: string): string[] {
 }
 
 /** Convert a glob with `*`, `**`, `?` into a RegExp matched against a full path. */
+/**
+ * Every path that reaches a security check goes through this first.
+ *  - Backslashes become slashes: Windows paths must match the same patterns as everyone else's. Without this,
+ *    `D:\\proj\\.env` matched nothing and was readable (found by the first Windows CI run).
+ *  - Lower-cased: NTFS and default APFS are case-insensitive, so `.ENV` opens `.env`. Patterns are matched
+ *    case-insensitively everywhere; a file that differs only by case is never a different secret.
+ *  - A Windows drive prefix is kept (`c:/...`) so absolute-path logic still works.
+ */
+export function normalizePath(p: string, opts: { foldCase?: boolean } = {}): string {
+  const s = p.replace(/\\/g, "/");
+  return opts.foldCase === false ? s : s.toLowerCase();
+}
+
+/** Where the filesystem itself ignores case, containment must too; where it does not, folding would loosen the check. */
+export const FS_IGNORES_CASE = process.platform === "win32" || process.platform === "darwin";
+
 export function globToRegExp(glob: string): RegExp {
   let re = "";
   for (let i = 0; i < glob.length; i++) {
@@ -184,15 +201,16 @@ export function globToRegExp(glob: string): RegExp {
     } else if (c === "?") re += "[^/]";
     else re += c.replace(/[.+^${}()|[\]\\]/g, "\\$&");
   }
-  return new RegExp(`^${re}$`);
+  return new RegExp(`^${re}$`, "i");
 }
 
 export function matchesSecretPattern(path: string, patterns: string[] = DEFAULT_SECRET_PATTERNS): boolean {
+  const norm = normalizePath(path);
   let hit = false;
   for (const p of patterns) {
     const negate = p.startsWith("!");
     const re = globToRegExp(negate ? p.slice(1) : p);
-    if (re.test(path)) hit = !negate;
+    if (re.test(norm)) hit = !negate;
   }
   return hit;
 }
@@ -283,6 +301,11 @@ export function tokenize(src: string): { tokens: Tok[]; heredoc: boolean } {
     let text = "";
     let quoted = false;
     const subshells: string[] = [];
+    // Windows shells (PowerShell, cmd) never escape with a backslash; a word that begins like a drive path
+    // (D:\...) or a relative one (.\..., ..\...) keeps its backslashes literal, or the path would dissolve
+    // (D:\proj\.env became D:proj.env and was readable: found by the first Windows CI run).
+    let winPath = false;
+    const startsWindowsPath = () => winPath || /^[A-Za-z]:$/.test(text) || text === "." || text === "..";
     while (i < src.length) {
       const ch = src[i]!;
       if (ch === "'") {
@@ -298,6 +321,12 @@ export function tokenize(src: string): { tokens: Tok[]; heredoc: boolean } {
         i++;
         while (i < src.length && src[i] !== '"') {
           if (src[i] === "\\" && i + 1 < src.length) {
+            if (startsWindowsPath()) {
+              winPath = true;
+              text += "\\";
+              i++;
+              continue;
+            }
             text += src[i + 1];
             i += 2;
             continue;
@@ -316,6 +345,12 @@ export function tokenize(src: string): { tokens: Tok[]; heredoc: boolean } {
         continue;
       }
       if (ch === "\\" && i + 1 < src.length) {
+        if (startsWindowsPath()) {
+          winPath = true;
+          text += "\\";
+          i++;
+          continue;
+        }
         text += src[i + 1];
         i += 2;
         continue;
@@ -451,7 +486,8 @@ function base(p: string): string {
 }
 
 function isPathLike(tok: string): boolean {
-  return tok.includes("/") || tok.startsWith("~") || /^\.[A-Za-z]/.test(tok) || /\.(pem|key|p12|pfx)$/i.test(tok);
+  // a drive-letter prefix (D:\proj\.env, C:/x) is a path on Windows; the POSIX tokenizer keeps it when quoted
+  return tok.includes("/") || tok.includes("\\") || tok.startsWith("~") || /^[A-Za-z]:[\\/]/.test(tok) || /^\.[A-Za-z]/.test(tok) || /\.(pem|key|p12|pfx)$/i.test(tok);
 }
 
 function expandHome(tok: string, home: string): string {

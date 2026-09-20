@@ -28,7 +28,8 @@ scrub(event);
 const roots = Array.isArray(event.workspace_roots) ? event.workspace_roots : [];
 const cwd = typeof event.cwd === "string" ? event.cwd : roots[0];
 let text = JSON.stringify(event);
-if (cwd) text = text.split(cwd).join("__PROJECT__");
+// the path appears JSON-escaped inside the serialized event (backslashes doubled on Windows)
+if (cwd) text = text.split(JSON.stringify(cwd).slice(1, -1)).join("__PROJECT__");
 const fixture = { _meta: { source: "recorded", recordedAt: rec.ts, runtime }, expect: effect ? { kind, effect } : { kind }, event: JSON.parse(text) };
 const dir = join("fixtures", "hooks", runtime);
 mkdirSync(dir, { recursive: true });
