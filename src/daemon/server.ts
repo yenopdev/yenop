@@ -15,6 +15,7 @@ import { homedir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { openYenop, type Yenop, type DecisionRequest } from "../core/index.js";
+import { readTelemetry, writeTelemetry, dueForDaily, toTelemetry, sendTelemetry, buildReport, hookedRuntimes, DEFAULT_TELEMETRY_ENDPOINT } from "../core/index.js";
 import { expectedBuildId } from "./client.js";
 import { hookTranslator } from "../adapters/hooks/registry.js";
 import { decideEvent } from "../adapters/hooks/pipeline.js";
@@ -36,6 +37,15 @@ export function yenopHome(): string {
 
 export function daemonInfoPath(home: string): string {
   return join(home, "daemon.json");
+}
+
+function pkgVersion(): string {
+  try {
+    const p = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "package.json");
+    return (JSON.parse(readFileSync(p, "utf8")) as { version?: string }).version ?? "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
 }
 
 /** Identifies this build. Shared with the client so both sides agree; see expectedBuildId. */
@@ -294,12 +304,30 @@ export async function startDaemon(opts: DaemonOptions = {}): Promise<RunningDaem
   }, 2000);
   staleCheck.unref();
 
+  // Opt-in telemetry, at most once a day, on a timer that is entirely off the decision path. Off by default;
+  // a person turns it on with `yenop telemetry enable`. Failures are silent and never retried within the hour.
+  const telemetryTick = async () => {
+    try {
+      const t = readTelemetry(home);
+      if (!dueForDaily(t)) return;
+      const y = cache.get(undefined);
+      const payload = toTelemetry(buildReport(y.config, { days: 1, all: true }), t.installId!, expectedBuildId() === "unknown" ? "0.0.0" : pkgVersion(), hookedRuntimes());
+      if (await sendTelemetry(t.endpoint ?? DEFAULT_TELEMETRY_ENDPOINT, payload)) writeTelemetry(home, { ...t, lastSentAt: new Date().toISOString() });
+    } catch {
+      /* telemetry must never affect the daemon */
+    }
+  };
+  const telemetryTimer = setInterval(() => void telemetryTick(), 60 * 60 * 1000);
+  telemetryTimer.unref();
+  setTimeout(() => void telemetryTick(), 30_000).unref();
+
   const running: RunningDaemon = {
     info,
     server,
     close: () =>
       new Promise<void>((resolve) => {
         clearInterval(staleCheck);
+        clearInterval(telemetryTimer);
         cache.clear();
         if (opts.register !== false) {
           try {

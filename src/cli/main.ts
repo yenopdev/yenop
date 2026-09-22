@@ -31,6 +31,11 @@ usage:
   yenop explain <tool> [json-args]     dry-run a tool call against the policies without recording a real step
   yenop status                         show mode, layers, daemon, and where receipts go for the current project
   yenop playground [dir]               create a throwaway project with enforcement on, for testing in Claude Code
+  yenop report [--days N] [--all] [--share]
+                                       what your agents did, in aggregate; --share sends the numbers (opt-in telemetry)
+  yenop telemetry enable [--endpoint URL]|disable|status|reset
+                                       opt-in, aggregate-only usage statistics; status shows exactly what is sent
+  yenop feedback                       open the discussion board to tell us what you found
   yenop demo                           a scripted, no-agent walk through what Yenop does, for showing people
   yenop viewer [--port N] [--all] [--open]
                                        a read-only local web page of the receipts, updating live
@@ -42,6 +47,16 @@ Set per project in <project>/.yenop/config.json, per machine in ~/.yenop/config.
 function home(): string {
   return process.env["YENOP_HOME"] ?? join(homedir(), ".yenop");
 }
+
+/** Yenop's own version, from the package.json that ships with the build. */
+const PKG_VERSION: string = (() => {
+  try {
+    const p = join(fileURLToPath(import.meta.url), "..", "..", "..", "package.json");
+    return (JSON.parse(readFileSync(p, "utf8")) as { version?: string }).version ?? "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
+})();
 
 async function main(argv: string[]): Promise<number> {
   const [cmd, ...rest] = argv;
@@ -242,6 +257,27 @@ async function main(argv: string[]): Promise<number> {
       await new Promise(() => {});
       return 0;
     }
+    case "report": {
+      const { values } = parseArgs({ args: rest, options: { days: { type: "string", default: "7" }, all: { type: "boolean", default: false }, share: { type: "boolean", default: false } } });
+      const { openYenop, buildReport, renderReport } = await import("../core/index.js");
+      const y = openYenop({ cwd: process.cwd(), dryRun: true });
+      try {
+        const r = buildReport(y.config, { days: Number(values.days), all: values.all });
+        process.stdout.write(renderReport(r) + "\n");
+        if (values.share) return shareReport(y.config.home, r);
+        return 0;
+      } finally {
+        y.close();
+      }
+    }
+    case "telemetry":
+      return telemetryCommand(rest[0], rest.slice(1));
+    case "feedback": {
+      const url = "https://github.com/yenopdev/yenop/discussions";
+      process.stdout.write(`Tell us what you found: ${url}\nThe most useful things to share: an ask that should not have been asked, a deny that was wrong, or something an agent did that Yenop missed.\n`);
+      openInBrowser(url);
+      return 0;
+    }
     case "demo": {
       const { runDemo } = await import("./demo.js");
       const opts: { color?: boolean } = {};
@@ -437,6 +473,79 @@ async function init(rest: string[]): Promise<number> {
     process.stdout.write(`agents Yenop can hook: ${hookRuntimes().join(", ")}\n`);
   }
   return 0;
+}
+
+function openInBrowser(url: string): void {
+  const opener = process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
+  import("node:child_process").then(({ spawn }) => {
+    try {
+      spawn(opener, [url], { stdio: "ignore", detached: true }).unref();
+    } catch {
+      /* the URL is printed */
+    }
+  }).catch(() => {});
+}
+
+async function shareReport(h: string, r: import("../core/index.js").Report): Promise<number> {
+  const { readTelemetry, toTelemetry, sendTelemetry, hookedRuntimes, DEFAULT_TELEMETRY_ENDPOINT } = await import("../core/index.js");
+  const t = readTelemetry(h);
+  if (!t.enabled || !t.installId) {
+    process.stdout.write(`\nNot sent: telemetry is off. Turn it on with "yenop telemetry enable" (aggregate numbers only; "yenop telemetry status" shows exactly what would be sent).\n`);
+    return 1;
+  }
+  const payload = toTelemetry(r, t.installId, PKG_VERSION, hookedRuntimes(process.cwd()));
+  const ok = await sendTelemetry(t.endpoint ?? DEFAULT_TELEMETRY_ENDPOINT, payload);
+  process.stdout.write(ok ? `\nSent the numbers above (no commands, paths, prompts or names). Thank you.\n` : `\nCould not reach the telemetry endpoint; nothing was sent. Try again later or share the report by hand at https://github.com/yenopdev/yenop/discussions\n`);
+  return ok ? 0 : 1;
+}
+
+/** Which runtimes have a Yenop hook registered for the current project or user. Names only. */
+
+async function telemetryCommand(sub: string | undefined, args: string[] = []): Promise<number> {
+  const { readTelemetry, enableTelemetry, disableTelemetry, resetInstallId, toTelemetry, buildReport, openYenop, hookedRuntimes, DEFAULT_TELEMETRY_ENDPOINT } = await import("../core/index.js");
+  const h = home();
+  switch (sub) {
+    case "enable": {
+      // A self-hosted receiver (an on-prem control plane) may be named. Off loopback it must be HTTPS: the
+      // payload is aggregate, but it still leaves the machine.
+      let endpoint: string | undefined;
+      const i = args.indexOf("--endpoint");
+      if (i !== -1) {
+        endpoint = args[i + 1];
+        let u: URL | undefined;
+        try { u = endpoint ? new URL(endpoint) : undefined; } catch { /* reported below */ }
+        const loopback = u && (u.hostname === "127.0.0.1" || u.hostname === "localhost" || u.hostname === "[::1]");
+        if (!u || !(u.protocol === "https:" || (u.protocol === "http:" && loopback))) return fail(`--endpoint must be an https:// URL (http:// only on loopback): ${endpoint ?? "(missing)"}`);
+      }
+      const s = enableTelemetry(h, endpoint);
+      process.stdout.write(`telemetry: on (install id ${s.installId}${s.endpoint ? `, endpoint ${s.endpoint}` : ""}). Aggregate counts only, sent at most once a day by the daemon or when you run "yenop report --share".\nWhat is sent: version, OS, and counts of actions by verdict, rule id, runtime and tool kind. Never a command, path, prompt, source file, hostname, user or project name.\n"yenop telemetry status" shows the exact payload; "yenop telemetry disable" turns it off.\n`);
+      return 0;
+    }
+    case "disable":
+      disableTelemetry(h);
+      process.stdout.write(`telemetry: off. Nothing will be sent.\n`);
+      return 0;
+    case "reset": {
+      const s = resetInstallId(h);
+      process.stdout.write(`telemetry: new install id ${s.installId}${s.enabled ? "" : " (telemetry is off)"}\n`);
+      return 0;
+    }
+    case "status":
+    case undefined: {
+      const s = readTelemetry(h);
+      process.stdout.write(`telemetry: ${s.enabled ? "on" : "off"}${s.installId ? `  install id ${s.installId}` : ""}${s.endpoint ? `  endpoint ${s.endpoint}` : `  endpoint ${DEFAULT_TELEMETRY_ENDPOINT}`}${s.lastSentAt ? `  last sent ${s.lastSentAt}` : ""}\n`);
+      const y = openYenop({ cwd: process.cwd(), dryRun: true });
+      try {
+        const payload = toTelemetry(buildReport(y.config, { days: 7 }), s.installId ?? "inst_(assigned on enable)", PKG_VERSION, hookedRuntimes(process.cwd()));
+        process.stdout.write(`\nExactly what would be sent (last 7 days):\n${JSON.stringify(payload, null, 2)}\n`);
+      } finally {
+        y.close();
+      }
+      return 0;
+    }
+    default:
+      return fail(`unknown telemetry command: ${sub}`);
+  }
 }
 
 const LOCAL_TEMPLATE = {

@@ -79,6 +79,17 @@ A read-only web page of the receipts, on this machine only, updating every coupl
 
 Roll it out without breaking anyone's flow: **observe mode** records decisions without blocking. Run it for a week, read what would have been stopped, tune the policies, then switch to enforce.
 
+## Read the week
+
+```sh
+yenop report            # last 7 days, this project
+yenop report --days 30 --all
+```
+
+Counts by verdict, by rule, by runtime and by kind of action, from the receipts on this machine. The line that matters is the **ask approval rate**: of the calls held for a person, how many the person then allowed. Near 100 % means a rule asks too often; near 0 % means the asks were real catches. That is how the baseline gets tuned by evidence rather than opinion. `yenop feedback` opens the discussion board for the things a number cannot say.
+
+**Telemetry is off by default and stays off unless you turn it on.** `yenop telemetry enable` sends the report's numbers once a day; `yenop telemetry status` prints the exact payload; `disable` stops it; `reset` issues a new random install id. What is sent is an allow-list, built in [`src/core/telemetry.ts`](src/core/telemetry.ts): counts by verdict, rule id, runtime and tool kind, the Yenop version, the operating system name and major version, which runtimes are hooked, and a random install id. Never a command, a path, a prompt, source, a hostname, a username, a project or tenant name, a receipt, or an MCP argument. A field not listed there does not leave the machine.
+
 ---
 
 ## Every agent, one engine

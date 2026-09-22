@@ -11,6 +11,8 @@
 - Tenants are `{ id, name }`; ids are `tn_` plus 26 characters, issued at init, never changed. Requests do not carry a tenant; the engine instance does.
 - Policies are layered: baseline (shipped, in `policies/`), home (`~/.yenop/policies`), project (`<repo>/.yenop/policies`), plus `disabledPolicies` in config. Init never copies the baseline; users never edit shipped files.
 - Every policy has an `@id`. Evaluation errors fail closed. The Claude Code adapter only tightens: it prints nothing on allow.
+- Telemetry (`src/core/telemetry.ts`) is off by default and an allow-list: `toTelemetry` is the only place a field is named, `TELEMETRY_SCHEMA` is bumped on any shape change, and the receiver validates the same shape independently. A new report field is not sent until it is added there on purpose. Never a command, path, prompt, source, hostname, user, project or tenant name, receipt, or MCP argument; the report's `scope` stays local. Rule ids that do not look like identifiers fold to `other`. A custom endpoint must be `https://`, or `http://` on loopback only.
+- The receipts-derived report (`src/core/report.ts`) is the single source for `yenop report`, `--share` and the daemon's daily send, so a person can always see exactly what the numbers are before they leave.
 
 ## Paths
 - Every path that reaches a security check goes through `normalizePath` (`src/core/shell.ts`): backslashes become slashes and case is folded. The first Windows CI run (2026-09-20) showed `D:\proj\.env` was readable and `.cursor\hooks.json` editable because nothing matched backslashes; case folding also closes `.ENV` on NTFS and default APFS, which are case-insensitive.

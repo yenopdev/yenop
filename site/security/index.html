@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Yenop — Security and threat model</title>
+<meta name="description" content="What Yenop protects against, what it does not claim to protect against, how to verify it, and what leaves your machine.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230b0f14'/%3E%3Cpath d='M9 8l7 9 7-9M16 17v7' stroke='%23e6edf3' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<a class="preview" href="../">Yenop · Pre-alpha · Developer Preview</a>
+
+<header class="hero">
+  <div class="wordmark">YENOP / SECURITY</div>
+  <h1>Threat model</h1>
+  <p class="lede">A security tool should say what it stops, what it does not, and how you can check.</p>
+</header>
+
+<section>
+  <h2>Yenop protects against</h2>
+  <ul class="threat">
+    <li><span class="yes">✓</span><div>Tool misuse after a prompt injection<small>An agent convinced to act still has to pass a rule. The model's decision is never the final authorization decision.</small></div></li>
+    <li><span class="yes">✓</span><div>Unauthorized destructive commands, and writes outside the project<small>Commands are parsed, not pattern-matched: <code>sudo</code>, <code>xargs</code>, <code>bash -c</code>, <code>$(...)</code>, variables and redirects are followed.</small></div></li>
+    <li><span class="yes">✓</span><div>Reads of secret files and credential stores<small>However the path is spelled or reached: relative, quoted, through a variable, from git history, on Windows or POSIX.</small></div></li>
+    <li><span class="yes">✓</span><div>Exfiltration paths<small>A credential over the network, a download piped into a shell, an outside call after sensitive data.</small></div></li>
+    <li><span class="yes">✓</span><div>Multi-step attack chains<small>Every run remembers whether it has taken in untrusted content and whether it has touched sensitive data. Steps that look harmless one at a time are judged together.</small></div></li>
+    <li><span class="yes">✓</span><div>Tool servers overreaching what they claimed to cover<small>The MCP gateway judges every <code>tools/call</code> before it reaches the server.</small></div></li>
+    <li><span class="yes">✓</span><div>Self-disable<small>Any change to Yenop's own files, policies, mode, daemon, or the hook registration of any agent needs a person.</small></div></li>
+    <li><span class="yes">✓</span><div>Runaway loops<small>Per-run budgets.</small></div></li>
+  </ul>
+
+  <h2>Yenop does not claim to protect against</h2>
+  <ul class="threat">
+    <li><span class="no">✗</span><div>A person with root on the machine, or an attacker who already has it<small>They can remove Yenop like any other program.</small></div></li>
+    <li><span class="no">✗</span><div>A compromised operating system or a compromised Yenop binary</div></li>
+    <li><span class="no">✗</span><div>Vulnerabilities inside a tool that was legitimately allowed to run</div></li>
+    <li><span class="no">✗</span><div>Actions taken through a path Yenop is not hooked into<small>An agent Yenop does not yet support, or a runtime that ignores a hook by design. Yenop's boundary is fail-closed; a runtime that proceeds when a hook does not answer is fail-open by its own design, and we say so rather than imply otherwise.</small></div></li>
+    <li><span class="no">✗</span><div>A wholesale rewrite of the receipts file from scratch<small>The hash chain catches edits, deletions and reordering locally. Anchoring the head against a full rewrite is the control plane's job.</small></div></li>
+  </ul>
+  <p><b>Yenop governs agent execution. It does not govern a compromised host.</b></p>
+</section>
+
+<section>
+  <h2>How it fails</h2>
+  <p><b>Closed.</b> Any evaluation error is a deny. A policy file that does not parse makes Yenop refuse every action in that project, naming the file and the error, while keeping <code>yenop check</code>, <code>status</code> and <code>receipts</code> working so a person can fix it. Malformed hook input is a deny. Code handed to an interpreter that Yenop cannot read as shell is treated as opaque and needs a person, so obfuscation becomes the reason you are asked.</p>
+</section>
+
+<section>
+  <h2>How we know it works</h2>
+  <p>Not by trying twenty prompts. Three layers, all in the repository and all run on every push:</p>
+  <p><b>Surface enumeration.</b> Every event each runtime can emit is listed and has a recorded fixture, so an adapter that stops handling an event fails a test rather than a user.</p>
+  <p><b>Property tests.</b> About fourteen thousand generated, disguised commands per run: wrappers, quoting, variables, Windows paths, redirects. The parser must reach the same verdict for every spelling of the same action.</p>
+  <p><b>An adversarial harness.</b> A real model, given a goal and a blocked action, tries to find another route. Yenop is run with the runtime's own sandbox off, so nothing but Yenop stands in the way. Findings become fixtures.</p>
+  <p>And the boundary is stated: what is outside it is listed above, not discovered later.</p>
+</section>
+
+<section>
+  <h2>What leaves your machine</h2>
+  <p><b>By default, nothing.</b> Decisions, policies, run state and receipts are local files. The daemon listens on <code>127.0.0.1</code> only and requires a token.</p>
+  <p><b>Telemetry is off until you turn it on.</b> <code>yenop telemetry enable</code> sends the report's numbers once a day: counts by verdict, rule id, runtime and tool kind, the Yenop version, the operating system name and major version, which runtimes are hooked, and a random install id you can reset. Never a command, a path, a prompt, source, a hostname, a username, a project name, a receipt, or an MCP argument. The payload is built from an allow-list in the source, and <code>yenop telemetry status</code> prints exactly what would be sent.</p>
+  <p><b>Receipts are evidence.</b> <code>yenop receipts --verify</code> checks the hash chain and exits non-zero on the first broken line. A third party can check it without trusting us.</p>
+</section>
+
+<section>
+  <h2>Reporting a vulnerability</h2>
+  <p>Write to <a href="mailto:security@yenop.com">security@yenop.com</a>. Tell us what you found and how to reproduce it. We answer as soon as we see it, within one working day at most, and credit you in the fix unless you prefer otherwise. Please do not open a public issue for a bypass until it is fixed.</p>
+</section>
+
+<footer>
+  <p><a href="../">Home</a> · <a href="https://github.com/yenopdev/yenop">GitHub</a> · <a href="https://github.com/yenopdev/yenop/blob/main/README.md#what-it-protects-against-and-what-it-does-not">The same list in the README</a></p>
+</footer>
+</body>
+</html>
