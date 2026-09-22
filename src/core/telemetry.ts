@@ -165,6 +165,7 @@ export function hookedRuntimes(cwd?: string): string[] {
     ["claude-code", join(".claude", "settings.json"), "hook claude-code"],
     ["cursor", join(".cursor", "hooks.json"), "hook cursor"],
     ["codex", join(".codex", "hooks.json"), "hook codex"],
+    ["gemini", join(".gemini", "settings.json"), "hook gemini"],
   ];
   const out = new Set<string>();
   for (const [runtime, rel, marker] of files) if (roots.some((r) => has(join(r, rel), marker))) out.add(runtime);

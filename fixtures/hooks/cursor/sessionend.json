@@ -1,26 +1,38 @@
 {
   "_meta": {
-    "source": "documented",
-    "note": "shape from the runtime's public docs; replace with a recorded event (see docs/test-plan.md)"
+    "source": "recorded",
+    "recordedAt": "2026-09-22T22:59:14.398Z",
+    "runtime": "cursor"
   },
   "expect": {
     "kind": "session-end"
   },
   "event": {
-    "conversation_id": "fx-cu-1",
-    "generation_id": "g1",
-    "model": "x",
+    "conversation_id": "928d391c-dc2e-4eca-bf80-e04f525b83f0",
+    "generation_id": "1165a29c-4d72-421d-be75-0b8f0f4b2275",
+    "model": "cursor-grok-4.6-medium",
+    "model_id": "grok-4.6",
+    "model_params": [
+      {
+        "id": "effort",
+        "value": "medium"
+      },
+      {
+        "id": "fast",
+        "value": "false"
+      }
+    ],
+    "reason": "user_close",
+    "duration_ms": 0,
+    "is_background_agent": false,
+    "final_status": "completed",
+    "session_id": "928d391c-dc2e-4eca-bf80-e04f525b83f0",
     "hook_event_name": "sessionEnd",
-    "cursor_version": "3.6.0",
+    "cursor_version": "3.21.18",
     "workspace_roots": [
       "__PROJECT__"
     ],
-    "user_email": null,
-    "transcript_path": null,
-    "session_id": "fx-cu-1",
-    "reason": "completed",
-    "duration_ms": 1000,
-    "is_background_agent": false,
-    "final_status": "ok"
+    "user_email": "REDACTED",
+    "transcript_path": "REDACTED"
   }
 }

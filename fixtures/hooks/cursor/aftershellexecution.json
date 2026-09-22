@@ -1,7 +1,7 @@
 {
   "_meta": {
     "source": "recorded",
-    "recordedAt": "2026-09-22T22:32:47.037Z",
+    "recordedAt": "2026-09-22T23:01:38.258Z",
     "runtime": "cursor"
   },
   "expect": {
@@ -9,20 +9,14 @@
   },
   "event": {
     "conversation_id": "928d391c-dc2e-4eca-bf80-e04f525b83f0",
-    "generation_id": "8c0fef1a-5bf5-48f4-89a3-4e6c8e0c1c27",
+    "generation_id": "f7b36ff9-a944-4967-af99-ebf66cd0cd78",
     "model": "grok-4.6",
-    "tool_name": "Shell",
-    "tool_input": {
-      "command": "npm test",
-      "cwd": "__PROJECT__",
-      "timeout": 30000
-    },
-    "tool_output": "REDACTED",
-    "duration": 1130.53,
-    "tool_use_id": "839e804d-75ec-48e6-ba25-5c88df34fb15",
-    "cwd": "__PROJECT__",
+    "command": "ls -la build",
+    "output": "REDACTED",
+    "duration": 524.33,
+    "sandbox": false,
     "session_id": "928d391c-dc2e-4eca-bf80-e04f525b83f0",
-    "hook_event_name": "postToolUse",
+    "hook_event_name": "afterShellExecution",
     "cursor_version": "3.21.18",
     "workspace_roots": [
       "__PROJECT__"

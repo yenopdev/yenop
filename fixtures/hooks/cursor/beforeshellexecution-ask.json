@@ -1,26 +1,27 @@
 {
   "_meta": {
-    "source": "documented",
-    "note": "shape from the runtime's public docs; replace with a recorded event (see docs/test-plan.md)"
+    "source": "recorded",
+    "recordedAt": "2026-09-22T23:01:40.547Z",
+    "runtime": "cursor"
   },
   "expect": {
     "kind": "decision",
-    "effect": "ask",
-    "permission": "ask"
+    "effect": "ask"
   },
   "event": {
-    "conversation_id": "fx-cu-1",
-    "generation_id": "g1",
-    "model": "x",
+    "conversation_id": "928d391c-dc2e-4eca-bf80-e04f525b83f0",
+    "generation_id": "f7b36ff9-a944-4967-af99-ebf66cd0cd78",
+    "model": "grok-4.6",
+    "command": "rm -rf /Users/ertuncvarol/yenop-playground/build",
+    "cwd": "",
+    "sandbox": false,
+    "session_id": "928d391c-dc2e-4eca-bf80-e04f525b83f0",
     "hook_event_name": "beforeShellExecution",
-    "cursor_version": "3.6.0",
+    "cursor_version": "3.21.18",
     "workspace_roots": [
-      "__PROJECT__"
+      "/Users/ertuncvarol/yenop-playground"
     ],
-    "user_email": null,
-    "transcript_path": null,
-    "command": "git push --force origin main",
-    "cwd": "__PROJECT__",
-    "sandbox": false
+    "user_email": "REDACTED",
+    "transcript_path": "REDACTED"
   }
 }

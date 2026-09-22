@@ -1,0 +1,23 @@
+{
+  "_meta": {
+    "source": "recorded",
+    "recordedAt": "2026-09-22T21:40:34.828Z",
+    "runtime": "gemini"
+  },
+  "expect": {
+    "kind": "outcome"
+  },
+  "event": {
+    "session_id": "51b1a539-6b84-4c7c-8797-5f2618c0f704",
+    "transcript_path": "REDACTED",
+    "cwd": "__PROJECT__",
+    "hook_event_name": "AfterTool",
+    "timestamp": "2026-09-22T21:40:34.778Z",
+    "tool_name": "run_shell_command",
+    "tool_input": {
+      "command": "npm test",
+      "description": "Executing the configured test script from package.json, which simulates running a test suite."
+    },
+    "tool_response": "REDACTED"
+  }
+}

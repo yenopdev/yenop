@@ -28,6 +28,7 @@ beforeAll(() => {
   home = mkdtempSync(join(tmpdir(), "yenop-fx-"));
   project = join(home, "project");
   mkdirSync(join(project, ".cursor"), { recursive: true });
+  mkdirSync(join(project, ".gemini"), { recursive: true });
   y = openYenop({ home, cwd: project }); // baseline policies, enforce mode, fresh run state
 });
 afterAll(() => {

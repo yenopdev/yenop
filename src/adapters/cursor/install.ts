@@ -12,7 +12,9 @@ import { homedir } from "node:os";
 
 export const CURSOR_MARKER = "hook cursor";
 export const CURSOR_DECISION_EVENTS = ["beforeShellExecution", "beforeMCPExecution", "beforeReadFile", "preToolUse"] as const;
-export const CURSOR_REPORT_EVENTS = ["postToolUse", "postToolUseFailure", "sessionEnd"] as const;
+// afterShellExecution: seen live 2026-09-23 that Cursor reports a command the person SKIPPED as a normal
+// postToolUse with empty output and exit code 0, so postToolUse alone cannot say whether a shell call ran.
+export const CURSOR_REPORT_EVENTS = ["postToolUse", "postToolUseFailure", "afterShellExecution", "sessionEnd"] as const;
 
 interface CursorHookEntry {
   command: string;

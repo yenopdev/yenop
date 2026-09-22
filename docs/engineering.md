@@ -116,3 +116,25 @@
 
 ## Secrets
 Never in the repo, never in documentation, never in system prompts. Use `.env` (ignored) or the OS keychain.
+
+## Gemini CLI (adapter built 2026-09-23, to docs and source; live session pending)
+- Contract from geminicli.com/docs/hooks/reference, checked against `@google/gemini-cli-core` 0.60.0: BeforeTool/AfterTool/SessionEnd on stdin, JSON answer on stdout, `decision: allow|ask|deny`. `ask` forces Gemini's own confirmation even in auto-approve modes and shows `systemMessage`; `deny` skips the tool and the model gets "Tool execution blocked: <reason>".
+- Exit codes: 0 + JSON preferred; **1 means "warning, proceed" (an allow)**; other non-zero is a deny. A hook that times out or cannot spawn is ignored (fail-open). Yenop therefore answers exit 0 + JSON for every verdict, including failure; the Gemini translator never exits 1 or 2.
+- No per-call id: `geminiCallId(session, tool, input)` is derived so AfterTool outcomes attach to decisions.
+- MCP tools: `tool_name` is the sanitised `mcp_<server>_<tool>`; `mcp_context.server_name/tool_name` is exact and preferred.
+- Trust: `~/.gemini/trustedFolders.json` (project hooks skipped in an untrusted folder) and `~/.gemini/trusted_hooks.json` (`{project: ["name:command"]}`); `yenop status` reads both. The hook `name` ("yenop") is part of the acknowledgement key, so it must stay stable across versions.
+- Tool map lives in `src/adapters/gemini/hook.ts` (`BUILTIN`); when Gemini adds a world-touching tool, add it there and to the surface list, or the surface test cannot catch it.
+
+## OpenAI Agents SDK (adapter built 2026-09-23, in process)
+- `src/adapters/openai-agents/index.ts`, exported as `yenop/openai-agents` (package.json `exports`). Structural copies of `@openai/agents-core` 0.18.0 `toolGuardrail.d.ts` (ToolInputGuardrailData {context, agent, toolCall{name, arguments: JSON string, callId}}; output `{ behavior: allow | rejectContent{message} | throwException }`). Never import the SDK: versions must not have to agree.
+- Input guardrail = decision, output guardrail = "ran" outcome. One SDK RunContext object = one Yenop run (WeakMap), so run-level facts follow the agent.
+- Developer supplies `tools` (kind/readOnly/server per tool name; unlisted → unknown, not read-only → baseline asks), `mapArgs` (rename into command/file_path/paths/url), `onAsk` (route to a person; absent → refused, never allowed), `onDeny` ("reject" default | "throw").
+- Fail closed: non-JSON arguments, a throwing onAsk, or a Yenop error all reject. Observe mode allows and records.
+
+## Cursor, as it really behaves (live session 2026-09-23, Cursor 3.21.18)
+- `preToolUse` fires FIRST for every tool (Shell, Read, Write, Grep, Task, `MCP:<tool>`…), then the specialised hook (`beforeShellExecution`, `beforeReadFile`, `beforeMCPExecution`), then `afterShellExecution` and `postToolUse`. The docs present the specialised hooks as the gates; they are the second gate. A hook that prints nothing in `preToolUse` blocks the call under `failClosed` ("hook returned no output"): that is how the first adapter failed, in the safe direction.
+- The adapter judges every tool in `preToolUse` and never stays silent. Call ids are derived from conversation, generation, kind and the command or path (`cursorCallId`), so `preToolUse`, the specialised hook and the outcome share one id: one decision, one receipt, the outcome attaches.
+- `preToolUse` can only allow or deny. `DEFER_ASK_TO_SPECIALISED` lets a shell ask through as an allow because `beforeShellExecution` was SEEN to follow and asks (Cursor shows "Pending approval… Hook requested approval: Yenop: …" even in Run Everything mode). MCP is not deferred until `beforeMCPExecution` is seen live the same way. File edits: ask → deny with a message.
+- Skip is invisible to hooks: a command the person skipped is reported as `postToolUse` `{"output":"","exitCode":0}` and `afterShellExecution` with empty output, identical to a silent success. So on Cursor "approved, ran" means "Cursor reported it complete". Worth an upstream report: hooks need a skipped status.
+- Fixtures under `fixtures/hooks/cursor/` are recorded from that session except `beforemcpexecution-write` and `beforereadfile-secret` (still documented shapes).
+- A rebuild leaves a ~2 s window where a running daemon still answers with the old code before it retires; irrelevant for users, remember it when smoke-testing.

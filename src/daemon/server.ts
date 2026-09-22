@@ -18,7 +18,7 @@ import { openYenop, type Yenop, type DecisionRequest } from "../core/index.js";
 import { readTelemetry, writeTelemetry, dueForDaily, toTelemetry, sendTelemetry, buildReport, hookedRuntimes, DEFAULT_TELEMETRY_ENDPOINT } from "../core/index.js";
 import { expectedBuildId } from "./client.js";
 import { hookTranslator } from "../adapters/hooks/registry.js";
-import { decideEvent } from "../adapters/hooks/pipeline.js";
+import { decideEvent, eventCwd } from "../adapters/hooks/pipeline.js";
 
 export interface DaemonInfo {
   pid: number;
@@ -236,7 +236,9 @@ export async function startDaemon(opts: DaemonOptions = {}): Promise<RunningDaem
           const fake = { kind: "decision" as const, event: "?", askCapable: false, request: { runId: "invalid", principal: { runtime: t.runtime, agent: "?", user: "?" }, tool: { name: "?", kind: "unknown" as const, readOnly: false }, args: {} } };
           return send(res, 200, y.config.mode === "observe" ? {} : (t.body("deny", reason, y.config.mode, fake) ?? {}));
         }
-        const cwd = event.kind === "decision" ? event.request.cwd : undefined;
+        // Outcomes and session ends must reach the same project instance as the decision they belong to, or
+        // they are recorded against the wrong tenant and an approved call reads as "not run".
+        const cwd = eventCwd(event);
         const y = cache.get(cwd);
         if (event.kind === "decision") decisions++;
         return send(res, 200, decideEvent(y, t, event) ?? {});

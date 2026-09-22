@@ -32,9 +32,17 @@ export type HookEvent =
       /** the runtime's own event name, for translators that answer differently per event */
       event: string;
     }
-  | { kind: "outcome"; runId: string; callId: string; tool: string; outcome: Outcome; detail?: string }
-  | { kind: "session-end"; runId: string }
+  /** cwd on outcome and session-end selects the same project instance (tenant, policies) the decision used. */
+  | { kind: "outcome"; runId: string; callId: string; tool: string; outcome: Outcome; detail?: string; cwd?: string }
+  | { kind: "session-end"; runId: string; cwd?: string }
   | { kind: "ignore" };
+
+/** The project directory an event belongs to, whatever its kind. */
+export function eventCwd(event: HookEvent): string | undefined {
+  if (event.kind === "decision") return event.request.cwd;
+  if (event.kind === "ignore") return undefined;
+  return event.cwd;
+}
 
 export interface HookRunResult {
   stdout: string;
@@ -93,7 +101,7 @@ export async function runHookWith(t: HookTranslator, raw: string): Promise<HookR
   if (event.kind === "ignore") return t.result(null);
 
   const { openYenop } = await import("../../core/index.js");
-  const cwd = event.kind === "decision" ? event.request.cwd : undefined;
+  const cwd = eventCwd(event);
   const yenop = openYenop(cwd !== undefined ? { cwd } : {});
   try {
     return t.result(decideEvent(yenop, t, event));

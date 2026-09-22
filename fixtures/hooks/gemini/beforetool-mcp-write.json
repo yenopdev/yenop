@@ -1,0 +1,28 @@
+{
+  "_meta": {
+    "source": "documented",
+    "note": "shape from geminicli.com/docs/hooks/reference and @google/gemini-cli-core 0.60.0 (tool_name is the sanitised mcp_<server>_<tool>; mcp_context carries the exact names); replace with a recorded event (see docs/test-plan.md)"
+  },
+  "expect": {
+    "kind": "decision",
+    "effect": "ask"
+  },
+  "event": {
+    "session_id": "fx-gm-1",
+    "transcript_path": "/tmp/gemini/transcript.json",
+    "cwd": "__PROJECT__",
+    "hook_event_name": "BeforeTool",
+    "timestamp": "2026-09-22T10:00:04.000Z",
+    "tool_name": "mcp_supabase_execute_sql",
+    "tool_input": {
+      "query": "DROP TABLE users"
+    },
+    "mcp_context": {
+      "server_name": "supabase",
+      "tool_name": "execute_sql",
+      "command": "npx",
+      "args": ["-y", "@supabase/mcp-server"]
+    },
+    "original_request_name": "mcp_supabase_execute_sql"
+  }
+}

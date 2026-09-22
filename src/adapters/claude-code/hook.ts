@@ -100,6 +100,7 @@ export function parseClaudeCode(raw: string): HookEvent {
     if (!input.tool_use_id) return { kind: "ignore" };
     const ev: HookEvent = { kind: "outcome", runId: runIdOf(input), callId: input.tool_use_id, tool: input.tool_name, outcome };
     if (input.denial_reason !== undefined) ev.detail = input.denial_reason;
+    if (input.cwd !== undefined) ev.cwd = input.cwd;
     return ev;
   }
   if (input.hook_event_name !== undefined && input.hook_event_name !== "PreToolUse") return { kind: "ignore" };

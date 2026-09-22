@@ -1,0 +1,18 @@
+{
+  "_meta": {
+    "source": "recorded",
+    "recordedAt": "2026-09-22T22:04:31.835Z",
+    "runtime": "gemini"
+  },
+  "expect": {
+    "kind": "session-end"
+  },
+  "event": {
+    "session_id": "51b1a539-6b84-4c7c-8797-5f2618c0f704",
+    "transcript_path": "REDACTED",
+    "cwd": "__PROJECT__",
+    "hook_event_name": "SessionEnd",
+    "timestamp": "2026-09-22T22:04:31.779Z",
+    "reason": "exit"
+  }
+}

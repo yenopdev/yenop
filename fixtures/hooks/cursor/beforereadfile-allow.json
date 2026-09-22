@@ -1,25 +1,22 @@
 {
   "_meta": {
     "source": "recorded",
-    "recordedAt": "2026-09-22T22:37:40.219Z",
+    "recordedAt": "2026-09-22T22:38:06.514Z",
     "runtime": "cursor"
   },
   "expect": {
     "kind": "decision",
-    "effect": "ask"
+    "effect": "allow"
   },
   "event": {
     "conversation_id": "928d391c-dc2e-4eca-bf80-e04f525b83f0",
-    "generation_id": "6ceeffec-8c3e-4cb0-b76b-a84fb82bb64b",
+    "generation_id": "04067db6-25aa-4a2d-9ebb-034de54a2901",
     "model": "grok-4.6",
-    "tool_name": "Write",
-    "tool_input": {
-      "file_path": "__PROJECT__/.cursor/hooks.json",
-      "content": "REDACTED"
-    },
-    "tool_use_id": "call-405ddc0e-f576-45ef-85b0-7ff34c9b22ce-9\nfc_f02f9cfb-0b54-9f8b-ac1c-df0151c11eb6_0",
+    "content": "REDACTED",
+    "file_path": "__PROJECT__/hello.txt",
+    "attachments": [],
     "session_id": "928d391c-dc2e-4eca-bf80-e04f525b83f0",
-    "hook_event_name": "preToolUse",
+    "hook_event_name": "beforeReadFile",
     "cursor_version": "3.21.18",
     "workspace_roots": [
       "__PROJECT__"

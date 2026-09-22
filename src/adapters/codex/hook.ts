@@ -100,10 +100,13 @@ export function parseCodex(raw: string): HookEvent {
       const callId = str(e.tool_use_id);
       const tool = str(e.tool_name);
       if (!callId || !tool) return { kind: "ignore" };
-      return { kind: "outcome", runId, callId, tool, outcome: "ran" };
+      const cwd = str(e.cwd);
+      return cwd !== undefined ? { kind: "outcome", runId, callId, tool, outcome: "ran", cwd } : { kind: "outcome", runId, callId, tool, outcome: "ran" };
     }
-    case "SessionEnd":
-      return { kind: "session-end", runId };
+    case "SessionEnd": {
+      const cwd = str(e.cwd);
+      return cwd !== undefined ? { kind: "session-end", runId, cwd } : { kind: "session-end", runId };
+    }
     default:
       return { kind: "ignore" };
   }

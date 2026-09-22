@@ -54,7 +54,8 @@ describe("codex translator: parsing", () => {
   });
   it("turns PostToolUse into an outcome and SessionEnd into session-end", () => {
     expect(parseCodex(ev("PostToolUse", { tool_name: "Bash", tool_input: {}, tool_response: {}, tool_use_id: "c1" }))).toMatchObject({ kind: "outcome", callId: "c1", outcome: "ran", runId: "codex:s1" });
-    expect(parseCodex(ev("SessionEnd", { reason: "other" }))).toEqual({ kind: "session-end", runId: "codex:s1" });
+    // cwd rides along so the outcome and the end of the run reach the project instance the decision used
+    expect(parseCodex(ev("SessionEnd", { reason: "other" }))).toMatchObject({ kind: "session-end", runId: "codex:s1", cwd: expect.any(String) });
   });
   it("ignores events it does not judge, and fails closed on malformed input", () => {
     for (const n of ["UserPromptSubmit", "PreCompact", "Stop", "SubagentStart"]) expect(parseCodex(ev(n, {})).kind).toBe("ignore");

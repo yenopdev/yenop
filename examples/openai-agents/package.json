@@ -1,0 +1,14 @@
+{
+  "name": "yenop-example-openai-agents",
+  "private": true,
+  "type": "module",
+  "description": "An OpenAI Agents SDK agent with Yenop guardrails in front of its tools.",
+  "scripts": {
+    "start": "node agent.mjs"
+  },
+  "dependencies": {
+    "@openai/agents": "^0.18.0",
+    "yenop": "file:../..",
+    "zod": "^4.0.0"
+  }
+}

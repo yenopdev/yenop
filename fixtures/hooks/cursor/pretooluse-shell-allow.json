@@ -1,15 +1,16 @@
 {
   "_meta": {
     "source": "recorded",
-    "recordedAt": "2026-09-22T22:32:47.037Z",
+    "recordedAt": "2026-09-22T22:21:54.815Z",
     "runtime": "cursor"
   },
   "expect": {
-    "kind": "outcome"
+    "kind": "decision",
+    "effect": "allow"
   },
   "event": {
     "conversation_id": "928d391c-dc2e-4eca-bf80-e04f525b83f0",
-    "generation_id": "8c0fef1a-5bf5-48f4-89a3-4e6c8e0c1c27",
+    "generation_id": "d39aa23d-517f-4453-af2b-9c3c04d7b3e9",
     "model": "grok-4.6",
     "tool_name": "Shell",
     "tool_input": {
@@ -17,12 +18,10 @@
       "cwd": "__PROJECT__",
       "timeout": 30000
     },
-    "tool_output": "REDACTED",
-    "duration": 1130.53,
-    "tool_use_id": "839e804d-75ec-48e6-ba25-5c88df34fb15",
+    "tool_use_id": "56dcc862-379c-4f82-9323-4e4090f71b4c",
     "cwd": "__PROJECT__",
     "session_id": "928d391c-dc2e-4eca-bf80-e04f525b83f0",
-    "hook_event_name": "postToolUse",
+    "hook_event_name": "preToolUse",
     "cursor_version": "3.21.18",
     "workspace_roots": [
       "__PROJECT__"

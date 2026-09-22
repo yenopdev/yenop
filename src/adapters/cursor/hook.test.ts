@@ -33,17 +33,42 @@ describe("cursor translator: parsing", () => {
     expect(e.request.tool).toMatchObject({ name: "Read", readOnly: true });
     expect(e.request.args).toEqual({ file_path: "/p/.env" }); // content is never carried into a decision
   });
-  it("preToolUse judges file mutations, ignores shell and reads, and leaves unknown tools to Cursor", () => {
+  it("preToolUse judges every tool: shell, reads, mutations, MCP, and internal tools, never silent", () => {
+    // Cursor 3.21 sends Shell through preToolUse first; a silent hook there is a block with failClosed (seen live)
     const w = decision(parseCursor(ev("preToolUse", { tool_name: "Write", tool_input: { file_path: "/p/a.ts", contents: "x" }, tool_use_id: "t9" })));
     expect(w.askCapable).toBe(false);
     expect(w.request).toMatchObject({ callId: "t9", tool: { kind: "write", readOnly: false }, args: { file_path: "/p/a.ts" } });
-    expect(parseCursor(ev("preToolUse", { tool_name: "Shell", tool_input: { command: "ls" } })).kind).toBe("ignore");
-    expect(parseCursor(ev("preToolUse", { tool_name: "Read", tool_input: { file_path: "/p/a" } })).kind).toBe("ignore");
-    expect(parseCursor(ev("preToolUse", { tool_name: "WebSearch", tool_input: { query: "x" } })).kind).toBe("ignore");
+    const sh = decision(parseCursor(ev("preToolUse", { tool_name: "Shell", tool_input: { command: "ls", cwd: "/p/sub", timeout: 30000 }, tool_use_id: "t10", cwd: "/p" })));
+    expect(sh.request).toMatchObject({ tool: { name: "Bash", kind: "shell" }, args: { command: "ls" }, cwd: "/p/sub" });
+    expect(sh.request.callId).toMatch(/^c_[0-9a-f]{32}$/);
+    const rd = decision(parseCursor(ev("preToolUse", { tool_name: "Read", tool_input: { file_path: "/p/a" }, tool_use_id: "t11" })));
+    expect(rd.request.tool).toMatchObject({ name: "Read", readOnly: true });
+    const mcp = decision(parseCursor(ev("preToolUse", { tool_name: "MCP:execute_sql", tool_input: { query: "DROP TABLE x" }, tool_use_id: "t12" })));
+    expect(mcp.request.tool).toMatchObject({ kind: "mcp", name: "execute_sql", readOnly: false });
+    const grep = decision(parseCursor(ev("preToolUse", { tool_name: "Grep", tool_input: { pattern: "x", path: "/p" }, tool_use_id: "t13" })));
+    expect(grep.request.tool).toMatchObject({ kind: "read", readOnly: true });
+    expect(decision(parseCursor(ev("preToolUse", { tool_name: "Task", tool_input: { description: "x" }, tool_use_id: "t14" }))).request.tool).toMatchObject({ kind: "read", readOnly: true });
+    expect(decision(parseCursor(ev("preToolUse", { tool_name: "WebFetch", tool_input: { url: "https://x.example" }, tool_use_id: "t15" }))).request.tool).toMatchObject({ kind: "web", readOnly: true });
   });
-  it("turns postToolUse and postToolUseFailure into outcomes keyed by tool_use_id", () => {
+  it("gives one call one id across preToolUse, the specialised hook, and the outcome", () => {
+    const pre = decision(parseCursor(ev("preToolUse", { tool_name: "Shell", tool_input: { command: "npm test" }, tool_use_id: "t20" })));
+    const spec = decision(parseCursor(ev("beforeShellExecution", { command: "npm test", cwd: "/p" })));
+    const post = parseCursor(ev("postToolUse", { tool_name: "Shell", tool_use_id: "t20", tool_input: { command: "npm test" }, tool_output: "{}" }));
+    expect(spec.request.callId).toBe(pre.request.callId);
+    expect(post).toMatchObject({ kind: "outcome", callId: pre.request.callId, outcome: "ran" });
+    const read = decision(parseCursor(ev("preToolUse", { tool_name: "Read", tool_input: { file_path: "/p/a" }, tool_use_id: "t21" })));
+    expect(decision(parseCursor(ev("beforeReadFile", { file_path: "/p/a", content: "" }))).request.callId).toBe(read.request.callId);
+  });
+  it("turns postToolUse and postToolUseFailure into outcomes, and a permission failure into a denial", () => {
     expect(parseCursor(ev("postToolUse", { tool_name: "Write", tool_use_id: "t1", tool_input: {}, tool_output: "{}", duration: 3 }))).toMatchObject({ kind: "outcome", callId: "t1", outcome: "ran", runId: "cursor:c1" });
     expect(parseCursor(ev("postToolUseFailure", { tool_name: "Write", tool_use_id: "t2", error_message: "boom", failure_type: "error" }))).toMatchObject({ kind: "outcome", callId: "t2", outcome: "failed", detail: "boom" });
+    expect(parseCursor(ev("postToolUseFailure", { tool_name: "Shell", tool_use_id: "t3", tool_input: { command: "npm test" }, error_message: "blocked", failure_type: "permission_denied" }))).toMatchObject({ kind: "outcome", outcome: "denied" });
+  });
+  it("turns afterShellExecution into an outcome for the same call id as the shell decision", () => {
+    const pre = decision(parseCursor(ev("preToolUse", { tool_name: "Shell", tool_input: { command: "npm test" }, tool_use_id: "t30" })));
+    expect(parseCursor(ev("afterShellExecution", { command: "npm test", exit_code: 0 }))).toMatchObject({ kind: "outcome", callId: pre.request.callId, outcome: "ran" });
+    expect(parseCursor(ev("afterShellExecution", { command: "npm test", exit_code: 1 }))).toMatchObject({ kind: "outcome", outcome: "failed", detail: "exit code 1" });
+    expect(parseCursor(ev("afterShellExecution", {})).kind).toBe("ignore");
   });
   it("ignores events it does not judge", () => {
     for (const name of ["afterAgentResponse", "preCompact", "beforeSubmitPrompt", "subagentStart"]) expect(parseCursor(ev(name, { text: "x", prompt: "y" })).kind).toBe("ignore");
@@ -70,6 +95,13 @@ describe("cursor translator: answers", () => {
     const b = cursorBody("ask", "Needs a person: mcp-writes.", "enforce", dec(false));
     expect(b["permission"]).toBe("deny");
     expect(String(b["user_message"])).toMatch(/cannot ask a person/);
+  });
+  it("in preToolUse, defers a shell ask to beforeShellExecution (proven to follow) and still denies an MCP ask", () => {
+    const pre = (tool: { name: string; kind: "shell" | "mcp"; readOnly: boolean; server?: string }): Extract<HookEvent, { kind: "decision" }> => ({ kind: "decision", event: "preToolUse", askCapable: false, request: { runId: "r", principal: { runtime: "cursor", agent: "a", user: "u" }, tool, args: {} } });
+    expect(cursorBody("ask", "Needs a person: destructive-shell.", "enforce", pre({ name: "Bash", kind: "shell", readOnly: false }))).toEqual({ permission: "allow" });
+    expect(cursorBody("ask", "Needs a person: mcp-writes.", "enforce", pre({ name: "execute_sql", kind: "mcp", readOnly: false, server: "db" }))["permission"]).toBe("deny");
+    // a deny in preToolUse is still a deny: deferral is only for asks
+    expect(cursorBody("deny", "Blocked by policy no-secret-files.", "enforce", pre({ name: "Bash", kind: "shell", readOnly: false }))["permission"]).toBe("deny");
   });
   it("denies with the reason", () => {
     expect(cursorBody("deny", "Blocked by policy no-secret-files.", "enforce", dec(true))).toEqual({ permission: "deny", user_message: "Yenop: Blocked by policy no-secret-files." });

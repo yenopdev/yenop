@@ -72,6 +72,19 @@ describe("daemon", () => {
     await new Promise((r) => setTimeout(r, 1100));
     expect(await hook("Bash", { command: "cat ~/.ssh/id_ed25519" })).toEqual({});
   });
+  it("records an outcome against the project the decision was made in, not the home tenant", async () => {
+    // Found live with Gemini: an approved ask read as "not run" because the outcome event carried no cwd and
+    // landed on the home instance. The project is its own tenant here, so a wrong instance means no step found.
+    mkdirSync(join(proj, ".yenop"), { recursive: true });
+    writeFileSync(join(proj, ".yenop", "config.json"), JSON.stringify({ mode: "enforce", tenant: { id: "tn_0123456789abcdefghijklmnop", name: "proj" } }));
+    await new Promise((r) => setTimeout(r, 1100));
+    const id = `outcome-${Math.random()}`;
+    const ask = await hook("Bash", { command: "git push --force origin main" }, { tool_use_id: id });
+    expect(ask).toMatchObject({ hookSpecificOutput: { permissionDecision: "ask" } });
+    await hook("Bash", { command: "git push --force origin main" }, { tool_use_id: id, hook_event_name: "PostToolUse" });
+    const lines = readFileSync(join(home, "receipts.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l) as { kind?: string; callId?: string; outcome?: string });
+    expect(lines.find((l) => l.kind === "outcome" && l.callId === id)?.outcome).toBe("ran");
+  });
   it("serves /decide for other adapters", async () => {
     const r = await daemonRequest<{ effect: string }>(info, "/decide", {
       cwd: proj,

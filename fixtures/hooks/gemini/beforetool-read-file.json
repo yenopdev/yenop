@@ -1,0 +1,22 @@
+{
+  "_meta": {
+    "source": "recorded",
+    "recordedAt": "2026-09-22T21:40:29.239Z",
+    "runtime": "gemini"
+  },
+  "expect": {
+    "kind": "decision",
+    "effect": "allow"
+  },
+  "event": {
+    "session_id": "51b1a539-6b84-4c7c-8797-5f2618c0f704",
+    "transcript_path": "REDACTED",
+    "cwd": "__PROJECT__",
+    "hook_event_name": "BeforeTool",
+    "timestamp": "2026-09-22T21:40:29.188Z",
+    "tool_name": "read_file",
+    "tool_input": {
+      "file_path": "package.json"
+    }
+  }
+}

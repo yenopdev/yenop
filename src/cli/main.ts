@@ -5,11 +5,17 @@
  */
 import { parseArgs } from "node:util";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 
-const USAGE = `yenop — the layer between an AI agent and the systems it can touch
+const USAGE = `yenop — agents decide what to do; Yenop decides what is allowed to happen
+
+start here:
+  yenop init                           hook the agents in this project (Claude Code, Cursor, Codex, Gemini)
+  yenop demo                           a scripted attack, judged live, in thirty seconds
+  yenop viewer --open                  watch the receipts while an agent works
+  yenop report                         after a week: what would have been stopped, and were the asks right
 
 usage:
   yenop init [--user] [--no-hook] [--mode enforce|observe] [--hook http|command] [--agents a,b]
@@ -18,7 +24,7 @@ usage:
   yenop daemon run|start|stop|status   the resident decision service on 127.0.0.1
   yenop service install|uninstall|status|show
                                        keep the daemon alive under launchd (macOS) or systemd (Linux)
-  yenop hook claude-code|cursor|codex  (called by the agent) read its pre-action event on stdin, decide, answer
+  yenop hook claude-code|cursor|codex|gemini  (called by the agent) read its pre-action event on stdin, decide, answer
   yenop mcp [--server NAME] [--on-ask elicit|block|allow] -- CMD ...
                                        sit between an MCP client and an MCP server; gate every tools/call
                                        and ask the person through the client when a call needs one
@@ -212,7 +218,19 @@ async function main(argv: string[]): Promise<number> {
         const cursor = cover(join(process.cwd(), ".cursor", "hooks.json"), join(homedir(), ".cursor", "hooks.json"), "hook cursor");
         const codexPath = hooked(join(process.cwd(), ".codex", "hooks.json"), "hook codex") ? join(process.cwd(), ".codex", "hooks.json") : hooked(join(homedir(), ".codex", "hooks.json"), "hook codex") ? join(homedir(), ".codex", "hooks.json") : undefined;
         const codex = codexPath === undefined ? "no" : codexPath.startsWith(homedir() + "/.codex") ? "user" : "project";
-        process.stdout.write(`agents:    claude-code=${claude}  cursor=${cursor}  codex=${codex}   (yenop init hooks what it detects; --agents forces a list)\n`);
+        const gemini = cover(join(process.cwd(), ".gemini", "settings.json"), join(homedir(), ".gemini", "settings.json"), "hook gemini");
+        process.stdout.write(`agents:    claude-code=${claude}  cursor=${cursor}  codex=${codex}  gemini=${gemini}   (yenop init hooks what it detects; --agents forces a list)\n`);
+        if (gemini === "project") {
+          // Gemini skips a project's hooks in a folder it does not trust, and warns about hooks nobody acknowledged.
+          const { geminiFolderTrust, geminiHookTrust, GEMINI_MARKER } = await import("../adapters/gemini/install.js");
+          if (geminiFolderTrust(process.cwd()) === "untrusted") process.stdout.write(`WARNING:   Gemini does not trust this folder, so it skips the project's hooks: nothing is enforced on Gemini here. In Gemini run /permissions and trust the folder.\n`);
+          try {
+            const cmd = (JSON.parse(readFileSync(join(process.cwd(), ".gemini", "settings.json"), "utf8")) as { hooks?: Record<string, { hooks?: { command?: string }[] }[]> }).hooks?.["BeforeTool"]?.flatMap((g) => g.hooks ?? []).map((h) => h.command ?? "").find((c) => c.endsWith(GEMINI_MARKER));
+            if (cmd && geminiHookTrust(process.cwd(), cmd) === "untrusted") process.stdout.write(`note:      Gemini will show the Yenop hooks for review on its next start in this project; acknowledge them there.\n`);
+          } catch {
+            /* unreadable settings: the coverage line already says what is known */
+          }
+        }
         if (codexPath !== undefined) {
           // Codex keeps its own per-hook trust switch. Installed is not the same as running.
           const { codexHookState } = await import("../adapters/codex/install.js");
@@ -435,6 +453,18 @@ async function init(rest: string[]): Promise<number> {
     process.stdout.write(`created ${cfg}\n`);
   } else {
     upgradeConfig(cfg, CONFIG_VERSION, newTenantId);
+    // The machine's config already exists, so --mode would be silently ignored. A mode asked for explicitly
+    // is set for this project instead (its own layer), which is what a person running `init --mode observe`
+    // in a second project means.
+    if (rest.includes("--mode")) {
+      const projectCfg = join(process.cwd(), ".yenop", "config.json");
+      const current = existsSync(projectCfg) ? (JSON.parse(readFileSync(projectCfg, "utf8")) as Record<string, unknown>) : {};
+      if (current["mode"] !== values.mode) {
+        mkdirSync(dirname(projectCfg), { recursive: true });
+        writeFileSync(projectCfg, JSON.stringify({ ...current, mode: values.mode }, null, 2) + "\n");
+        process.stdout.write(`mode ${values.mode} set for this project in ${projectCfg}\n`);
+      }
+    }
   }
 
   const daemon = await ensureDaemon(h, { start: true, waitMs: 5000 });
@@ -469,9 +499,26 @@ async function init(rest: string[]): Promise<number> {
       process.stdout.write(`${r.changed ? "installed" : "already installed"} Codex hooks in ${r.path}\n`);
       process.stdout.write(`           Codex will ask you to review new hooks on its next start: choose "Trust all". A hook Codex has not trusted, or has disabled, never runs; "yenop status" checks.\n`);
     }
+    const { installGeminiHooks, geminiSettingsPath, geminiDetected } = await import("../adapters/gemini/install.js");
+    if (wanted ? wanted.includes("gemini") : geminiDetected(process.cwd())) {
+      const r = installGeminiHooks(geminiSettingsPath(values.user ? "user" : "project", process.cwd()), hookCommandFor(cliPath, "gemini"));
+      process.stdout.write(`${r.changed ? "installed" : "already installed"} Gemini CLI hooks in ${r.path}\n`);
+      if (!values.user) process.stdout.write(`           Gemini shows a project's new hooks for review on its next start; acknowledge them. It skips project hooks in a folder it does not trust; "yenop status" checks.\n`);
+    }
     const { hookRuntimes } = await import("../adapters/hooks/registry.js");
     process.stdout.write(`agents Yenop can hook: ${hookRuntimes().join(", ")}\n`);
   }
+  // Close with what a person needs to know: which mode is in force here, and what to do next.
+  const { openYenop } = await import("../core/index.js");
+  const effective = openYenop({ cwd: process.cwd(), dryRun: true });
+  const mode = effective.config.mode;
+  effective.close();
+  process.stdout.write(
+    mode === "observe"
+      ? `mode:      observe: every decision is recorded, nothing is blocked. Switch with: yenop init --mode enforce\n`
+      : `mode:      enforce: decisions are returned to the agent. To only record for a week first: yenop init --mode observe\n`,
+  );
+  process.stdout.write(`\nnext:      yenop demo            a scripted attack, judged live\n           yenop viewer --open   watch the receipts while an agent works\n           yenop report          after a week: what would have been stopped, and were the asks right\n`);
   return 0;
 }
 
