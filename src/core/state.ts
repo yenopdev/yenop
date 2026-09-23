@@ -67,10 +67,15 @@ export class SqliteRunState implements RunStateStore {
 
   constructor(path: string) {
     this.db = new DatabaseSync(path);
+    // WAL with synchronous=NORMAL: a decision makes several small writes and must not pay a disk sync for each.
+    // In WAL mode NORMAL cannot corrupt the database; a power cut can lose the last writes, which for run state
+    // is acceptable (the receipts log is the record). Measured: 70 ms per decision on a Windows CI disk with
+    // FULL, ~2 ms with NORMAL.
     const found = (this.db.prepare("PRAGMA user_version").get() as { user_version: number }).user_version;
     if (found > STATE_VERSION) throw new Error(`yenop: state database is version ${found}; this Yenop understands up to ${STATE_VERSION}. Upgrade Yenop.`);
     this.db.exec(`
       PRAGMA journal_mode = WAL;
+      PRAGMA synchronous = NORMAL;
       CREATE TABLE IF NOT EXISTS runs (
         tenant TEXT NOT NULL,
         run_id TEXT NOT NULL,

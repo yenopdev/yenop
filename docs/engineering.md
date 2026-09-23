@@ -138,3 +138,7 @@ Never in the repo, never in documentation, never in system prompts. Use `.env` (
 - Skip is invisible to hooks: a command the person skipped is reported as `postToolUse` `{"output":"","exitCode":0}` and `afterShellExecution` with empty output, identical to a silent success. So on Cursor "approved, ran" means "Cursor reported it complete". Worth an upstream report: hooks need a skipped status.
 - Fixtures under `fixtures/hooks/cursor/` are recorded from that session except `beforemcpexecution-write` and `beforereadfile-secret` (still documented shapes).
 - A rebuild leaves a ~2 s window where a running daemon still answers with the old code before it retires; irrelevant for users, remember it when smoke-testing.
+
+## State database sync (2026-09-23)
+- `PRAGMA journal_mode = WAL` plus `PRAGMA synchronous = NORMAL`, set on every open. A decision performs several small state writes; with SQLite's default FULL each one waits for a disk sync, which measured ~70 ms per decision on a Windows CI disk against ~2 ms with NORMAL. In WAL mode NORMAL cannot corrupt the database; a power cut can lose the last writes, acceptable for run state because the receipts log is the record.
+- Latency gates in `src/daemon/server.test.ts` measure the median of full decisions (fresh call ids), never replays from the call cache and never the mean.

@@ -153,8 +153,10 @@ describe("daemon", () => {
     await expect(daemonRequest(info, "/hooks/nope", {})).rejects.toThrow(/404/);
   });
   it("is as fast for Cursor as for Claude Code", async () => {
-    const body = { conversation_id: "c", generation_id: "g", workspace_roots: [proj], hook_event_name: "beforeShellExecution", command: "npm test", cwd: proj };
-    await daemonRequest(info, "/hooks/cursor", body);
-    expect(await medianMs(20, () => daemonRequest(info, "/hooks/cursor", body))).toBeLessThan(15 * PERF);
+    // a different command each time, so this measures full decisions, not replays from the call cache
+    const body = (i: number) => ({ conversation_id: "c", generation_id: "g", workspace_roots: [proj], hook_event_name: "beforeShellExecution", command: `npm test -- --shard ${i}`, cwd: proj });
+    await daemonRequest(info, "/hooks/cursor", body(-1));
+    let i = 0;
+    expect(await medianMs(20, () => daemonRequest(info, "/hooks/cursor", body(i++)))).toBeLessThan(15 * PERF);
   });
 });
