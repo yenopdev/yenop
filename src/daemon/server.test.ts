@@ -48,10 +48,16 @@ describe("daemon", () => {
   });
   it("is fast once warm", async () => {
     await hook("Bash", { command: "ls" });
-    const t0 = performance.now();
-    for (let i = 0; i < 20; i++) await hook("Bash", { command: "ls -la" });
-    const per = (performance.now() - t0) / 20;
-    expect(per).toBeLessThan(15 * PERF); // round trip incl. receipt write; typically ~2 ms locally
+    // The median, not the mean: this measures what the warm daemon is capable of, and a shared CI runner
+    // stalling one call for 300 ms says nothing about that. Seen on a Windows runner: mean 73 ms, median ~5.
+    const times: number[] = [];
+    for (let i = 0; i < 20; i++) {
+      const t0 = performance.now();
+      await hook("Bash", { command: "ls -la" });
+      times.push(performance.now() - t0);
+    }
+    const median = times.sort((a, b) => a - b)[10]!;
+    expect(median).toBeLessThan(15 * PERF); // round trip incl. receipt write; typically ~2 ms locally
   });
   it("writes receipts and counts decisions", async () => {
     const h = await daemonHealthy(info);
