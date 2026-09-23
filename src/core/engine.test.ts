@@ -104,10 +104,15 @@ describe("circuit breakers", () => {
     expect(d.reasons).toEqual(["breaker:max-denies"]);
   });
   it("counts steps per run and stops at the cap", () => {
-    const tiny = openYenop({ home: join(home, "tiny"), cwd, dryRun: true }); // in-memory state: this tests the breaker, not the disk (1000 writes took 12 s on a Windows runner)
+    // The breaker is under test, not a thousand evaluations: a home config with a small cap, in-memory state.
+    // (Driving the default cap of 1000 took 4–6 s on a Windows runner and tripped the test timeout.)
+    const tinyHome = join(home, "tiny");
+    mkdirSync(tinyHome, { recursive: true });
+    writeFileSync(join(tinyHome, "config.json"), JSON.stringify({ v: 1, tenant: { id: "tn_0123456789abcdefghijklmnop", name: "tiny" }, mode: "enforce", budgets: { maxStepsPerRun: 25, maxDeniesPerRun: 20 } }));
+    const tiny = openYenop({ home: tinyHome, cwd, dryRun: true });
     try {
-      // default cap is 1000; simulate by driving a run to the limit through the store directly
-      for (let i = 0; i < 1000; i++) tiny.decide(req("Read", { file_path: "/tmp/demo-project/a" }, "long"));
+      expect(tiny.config.budgets.maxStepsPerRun).toBe(25);
+      for (let i = 0; i < 25; i++) expect(tiny.decide(req("Read", { file_path: "/tmp/demo-project/a" }, "long")).effect).toBe("allow");
       const d = tiny.decide(req("Read", { file_path: "/tmp/demo-project/a" }, "long"));
       expect(d.effect).toBe("deny");
       expect(d.reasons).toEqual(["breaker:max-steps"]);
