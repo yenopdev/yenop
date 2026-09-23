@@ -29,6 +29,21 @@ afterAll(async () => {
 const hook = (tool: string, input: Record<string, unknown>, extra: Record<string, unknown> = {}) =>
   daemonRequest<Record<string, unknown>>(info, "/hooks/claude-code", { session_id: "s", cwd: proj, tool_name: tool, tool_input: input, tool_use_id: `t${Math.random()}`, ...extra });
 
+/**
+ * The median round trip of n calls. Latency gates use the median, not the mean: they measure what the warm
+ * daemon is capable of, and a shared CI runner stalling one call for 300 ms says nothing about that (seen on
+ * a Windows runner: mean 73 ms, median a few ms).
+ */
+async function medianMs(n: number, call: () => Promise<unknown>): Promise<number> {
+  const times: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const t0 = performance.now();
+    await call();
+    times.push(performance.now() - t0);
+  }
+  return times.sort((a, b) => a - b)[Math.floor(n / 2)]!;
+}
+
 describe("daemon", () => {
   it("reports health without a token", async () => {
     const h = await daemonHealthy(info);
@@ -48,16 +63,7 @@ describe("daemon", () => {
   });
   it("is fast once warm", async () => {
     await hook("Bash", { command: "ls" });
-    // The median, not the mean: this measures what the warm daemon is capable of, and a shared CI runner
-    // stalling one call for 300 ms says nothing about that. Seen on a Windows runner: mean 73 ms, median ~5.
-    const times: number[] = [];
-    for (let i = 0; i < 20; i++) {
-      const t0 = performance.now();
-      await hook("Bash", { command: "ls -la" });
-      times.push(performance.now() - t0);
-    }
-    const median = times.sort((a, b) => a - b)[10]!;
-    expect(median).toBeLessThan(15 * PERF); // round trip incl. receipt write; typically ~2 ms locally
+    expect(await medianMs(20, () => hook("Bash", { command: "ls -la" }))).toBeLessThan(15 * PERF); // round trip incl. receipt write; typically ~2 ms locally
   });
   it("writes receipts and counts decisions", async () => {
     const h = await daemonHealthy(info);
@@ -149,8 +155,6 @@ describe("daemon", () => {
   it("is as fast for Cursor as for Claude Code", async () => {
     const body = { conversation_id: "c", generation_id: "g", workspace_roots: [proj], hook_event_name: "beforeShellExecution", command: "npm test", cwd: proj };
     await daemonRequest(info, "/hooks/cursor", body);
-    const t0 = performance.now();
-    for (let i = 0; i < 20; i++) await daemonRequest(info, "/hooks/cursor", body);
-    expect((performance.now() - t0) / 20).toBeLessThan(15 * PERF);
+    expect(await medianMs(20, () => daemonRequest(info, "/hooks/cursor", body))).toBeLessThan(15 * PERF);
   });
 });
