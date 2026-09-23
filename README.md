@@ -6,11 +6,11 @@ An AI agent decides what it wants to do. Yenop decides what is allowed to happen
 
 **ALLOW** &nbsp;·&nbsp; **ASK** a person &nbsp;·&nbsp; **DENY**
 
-- **One layer across the agents you run.** Claude Code, Cursor, Codex CLI, and any tool that speaks MCP, judged by the same policies and written to one verifiable record. No single agent vendor will ever govern its competitors; a layer outside all of them can.
+- **One layer across the agents you run.** Claude Code, Cursor, Codex CLI, Gemini CLI, agents built on the OpenAI Agents SDK, and any tool that speaks MCP, judged by the same policies and written to one verifiable record. No single agent vendor will ever govern its competitors; a layer outside all of them can.
 - **It authorizes the action, not the reasoning.** Yenop does not decide whether an agent's thinking is safe. It decides whether the action the agent is about to execute is allowed, reading the actual command and file path, so there is no sentence to jailbreak. And it watches the whole run, so a harmful plan split across steps that each look harmless is still caught.
 - **Local-first.** It runs next to the agent, on your machine. No cloud dependency, no account, and no agent data, source, prompts or secrets leaves the machine unless you choose to export the audit trail. That trail is a plain file you own, hash-chained so tampering is detectable.
 
-Status: pre-alpha. **Source-available, not open source** (see License). Works today with Claude Code, Cursor and Codex CLI hooks and an MCP gateway for any MCP client. Next: the Gemini CLI hook, then the OpenAI Agents SDK and LangGraph.
+Status: **pre-alpha, developer preview** (0.1.0). **Source-available, not open source** (see License). Works today with Claude Code, Cursor, Codex CLI and Gemini CLI hooks, the OpenAI Agents SDK, and an MCP gateway for any MCP client, each verified in a live session against the current release of that runtime. The set of runtimes is frozen for this preview; the next one is added when people using Yenop ask for it.
 
 ## See it in thirty seconds
 
@@ -51,7 +51,7 @@ From source, today:
 
 ```sh
 npm install && npm run build && npm link
-yenop init            # detects Claude Code, Cursor, Codex; installs each hook
+yenop init            # detects Claude Code, Cursor, Codex, Gemini; installs each hook
 yenop status          # mode, layers, daemon, and which agents are covered
 yenop explain Bash '{"command":"terraform destroy -auto-approve"}'
 ```
@@ -228,7 +228,10 @@ src/daemon/     the resident decision service, its client, and the raw-socket fa
 src/viewer/     the read-only receipts page
 src/cli/        the yenop command
 policies/       the default policy pack and the vocabulary
+fixtures/       hook events recorded from each runtime, replayed on every push
+examples/       small agents with Yenop in front of them (OpenAI Agents SDK)
 harness/        the adversarial harness: a real model as red-teamer
+site/           yenop.com
 ```
 
 Design references: OWASP AISVS control group C09, the MCP specification, Cedar, AuthZEN, RFC 8693.

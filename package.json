@@ -1,9 +1,8 @@
 {
   "name": "yenop",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "description": "The local-first execution authorization layer for AI coding agents: ALLOW / ASK / DENY on every action, one set of rules across Claude Code, Cursor, Codex, Gemini and MCP.",
   "license": "FSL-1.1-ALv2",
-  "private": true,
   "type": "module",
   "bin": {
     "yenop": "./dist/cli/main.js"

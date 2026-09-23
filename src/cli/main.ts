@@ -42,6 +42,7 @@ usage:
   yenop telemetry enable [--endpoint URL]|disable|status|reset
                                        opt-in, aggregate-only usage statistics; status shows exactly what is sent
   yenop feedback                       open the discussion board to tell us what you found
+  yenop version                        print the version (include it in a bug report)
   yenop demo                           a scripted, no-agent walk through what Yenop does, for showing people
   yenop viewer [--port N] [--all] [--open]
                                        a read-only local web page of the receipts, updating live
@@ -67,6 +68,11 @@ const PKG_VERSION: string = (() => {
 async function main(argv: string[]): Promise<number> {
   const [cmd, ...rest] = argv;
   switch (cmd) {
+    case "version":
+    case "--version":
+    case "-v":
+      process.stdout.write(`yenop ${PKG_VERSION}\n`);
+      return 0;
     case "hook": {
       const { hookTranslator, hookRuntimes } = await import("../adapters/hooks/registry.js");
       const t = await hookTranslator(rest[0] ?? "");
