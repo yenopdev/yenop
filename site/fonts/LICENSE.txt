@@ -1,0 +1,2 @@
+IBM Plex Sans and IBM Plex Mono, copyright IBM Corp., licensed under the SIL Open Font License 1.1
+(https://github.com/IBM/plex). Latin subsets, served from this site so that no visitor request leaves it.
