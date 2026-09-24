@@ -65,8 +65,20 @@ const PKG_VERSION: string = (() => {
   }
 })();
 
+/** node:sqlite (the run state) exists unflagged from Node 22.13. Say so plainly instead of a module error. */
+const MIN_NODE = [22, 13] as const;
+function nodeTooOld(): string | undefined {
+  const [major = 0, minor = 0] = process.versions.node.split(".").map(Number);
+  return major < MIN_NODE[0] || (major === MIN_NODE[0] && minor < MIN_NODE[1]) ? `yenop needs Node ${MIN_NODE.join(".")} or later; this is Node ${process.versions.node}. Install a current Node from https://nodejs.org and try again.\n` : undefined;
+}
+
 async function main(argv: string[]): Promise<number> {
   const [cmd, ...rest] = argv;
+  const old = nodeTooOld();
+  if (old !== undefined) {
+    process.stderr.write(old);
+    return 1;
+  }
   switch (cmd) {
     case "version":
     case "--version":

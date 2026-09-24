@@ -40,7 +40,7 @@ Developers and security-minded teams giving coding agents, MCP tools, and autono
 
 ## Quickstart
 
-From npm, once published:
+Requires Node 22.13 or later (`node --version`). Then:
 
 ```sh
 npm install -g yenop
