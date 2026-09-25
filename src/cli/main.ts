@@ -537,6 +537,9 @@ async function init(rest: string[]): Promise<number> {
       : `mode:      enforce: decisions are returned to the agent. To only record for a week first: yenop init --mode observe\n`,
   );
   process.stdout.write(`\nnext:      yenop demo            a scripted attack, judged live\n           yenop viewer --open   watch the receipts while an agent works\n           yenop report          after a week: what would have been stopped, and were the asks right\n`);
+  // A nudge, never a question: telemetry stays off unless a person turns it on.
+  const { readTelemetry } = await import("../core/index.js");
+  if (!readTelemetry(h).enabled) process.stdout.write(`\ntelemetry: off. To help calibrate the baseline: yenop telemetry enable (counts only, never content; "yenop telemetry status" shows exactly what is sent)\n`);
   return 0;
 }
 
