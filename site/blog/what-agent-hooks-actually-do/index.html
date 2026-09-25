@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What Four Coding Agents' Hook Systems Actually Do</title>
+<meta name="description" content="Version-specific observations from wiring one authorization layer into Claude Code, Cursor, Codex CLI and Gemini CLI: where an action can be intercepted, what a hook can answer, and how each runtime fails.">
+<link rel="canonical" href="https://yenop.com/blog/what-agent-hooks-actually-do/">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Yenop">
+<meta property="og:url" content="https://yenop.com/blog/what-agent-hooks-actually-do/">
+<meta property="og:title" content="What Four Coding Agents' Hook Systems Actually Do">
+<meta property="og:description" content="Where an agent's action can be intercepted in Cursor 3.21, Gemini CLI 0.60, Codex CLI 0.155 and Claude Code 2.1, what a hook can answer, and how each runtime fails. Observations, not compatibility claims.">
+<meta property="og:image" content="https://yenop.com/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="What Four Coding Agents' Hook Systems Actually Do">
+<meta name="twitter:image" content="https://yenop.com/og.png">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230b0f14'/%3E%3Cpath d='M9 8l7 9 7-9M16 17v7' stroke='%23e6edf3' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="../../style.css">
+</head>
+<body>
+<header class="nav"><div class="wrap">
+  <a class="brand" href="../../"><svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#161F2A" stroke="#2A3542"/><path d="M9 8l7 9 7-9M16 17v7" stroke="#E6EDF3" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>Yenop</a>
+  <nav class="links"><a href="../../#how">How it decides</a><a href="../../#with">Works with</a><a href="../../#proof">Proof</a><a href="../../security/">Security</a><a href="../">Blog</a><a href="https://github.com/yenopdev/yenop" target="_blank" rel="noopener">GitHub</a></nav>
+  <a class="pill mono desk" href="https://www.npmjs.com/package/yenop" target="_blank" rel="noopener">npm i -g yenop</a>
+  <details class="menu"><summary aria-label="Menu"><span></span><span></span><span></span></summary>
+    <div class="sheet"><a href="../../#how">How it decides</a><a href="../../#with">Works with</a><a href="../../#proof">Proof</a><a href="../../security/">Security</a><a href="../">Blog</a><a href="https://github.com/yenopdev/yenop" target="_blank" rel="noopener">GitHub</a><a class="mono" href="https://www.npmjs.com/package/yenop" target="_blank" rel="noopener">npm i -g yenop</a></div>
+  </details>
+</div></header>
+<main class="wrap">
+<article class="post">
+  <div class="eyebrow">Blog · 2026-09-25</div>
+  <h1>What Four Coding Agents' Hook Systems Actually Do</h1>
+  <p class="lede">Claude Code, Cursor, Codex CLI and Gemini CLI each expose hooks or lifecycle controls that can sit between an agent's intent and the tool execution. Wiring one authorization layer into all four meant learning what each runtime actually does in practice, and where that differs from what I initially expected from the documentation. Some of it surprised me.</p>
+  <p>I wasn't trying to build a feature-by-feature comparison. I was trying to answer a narrower question:</p>
+  <p class="q">If I want one independent authorization layer to evaluate the actual action before it executes, where can I reliably intercept that action in each runtime?</p>
+  <p>The observations below come from live sessions against specific versions. They are version-specific runtime observations, not claims that these behaviors will remain unchanged as the agents evolve.</p>
+
+  <h2>Methodology</h2>
+  <p>I tested each runtime through the actual hook integration used by Yenop rather than inferring behavior from documentation alone. Where I describe a runtime behavior, I give the tested version and distinguish my observation from the runtime's documented contract. The goal is reproducibility, not a permanent compatibility claim. The recorded hook events from these sessions are the adapters' test fixtures in the repository.</p>
+
+  <h2>Cursor fires <code>preToolUse</code> first, for every tool</h2>
+  <p class="ver">Cursor 3.21.18</p>
+  <p>Cursor exposes a generic <code>preToolUse</code> hook as well as more specialized hooks such as <code>beforeShellExecution</code> and <code>beforeReadFile</code>.</p>
+  <p>In my testing, <code>preToolUse</code> ran first for Shell, Read, Write, Grep, MCP and the other tool types I exercised. In my tested path, the generic hook provided the allow/deny decision, while the specialized hook provided the approval path.</p>
+  <p>My first adapter ignored Shell at <code>preToolUse</code>, expecting <code>beforeShellExecution</code> to be the place where Shell should be judged. I had also configured the adapter to fail closed. The result was that Cursor blocked every command with:</p>
+  <pre class="out">hook returned no output</pre>
+  <p>Right failure direction, wrong assumption.</p>
+  <p>The working design was to judge every tool at the first gate, then let an ask decision continue to the specialized hook where Cursor can present its own approval UI. In my test, that appeared as:</p>
+  <pre class="out">Pending approval… Hook requested approval</pre>
+  <p>and the approval path still appeared in Run Everything mode.</p>
+  <p>The interesting lesson for an external authorization layer is that the generic interception point and the runtime's user-facing approval mechanism are not necessarily the same thing.</p>
+
+  <h2>Cursor doesn't tell hooks about Skip</h2>
+  <p class="ver">Cursor 3.21.18</p>
+  <p>When I clicked Skip on an approval, the hooks received a normal <code>postToolUse</code> event containing:</p>
+  <pre class="out">{"output":"","exitCode":0}</pre>
+  <p><code>afterShellExecution</code> fired in the same way. That makes a skipped command indistinguishable, at the hook and audit level I tested, from a command that actually ran and produced no output. This matters if you're building an audit trail from hook events.</p>
+  <p>Yenop therefore records this conservatively as "Cursor reported it complete" rather than claiming that the command definitely executed. That's an important distinction for an authorization and audit layer: absence of an execution signal isn't proof of execution. This is an auditability problem more than a Cursor bug; the runtime's approval UI simply doesn't tell hooks which way the person went.</p>
+
+  <h2>Gemini CLI treats different hook outcomes differently</h2>
+  <p class="ver">Gemini CLI 0.60.0</p>
+  <p>In my verified session, a hook exiting with code 1 was treated as a non-blocking outcome. A hook that timed out or failed to start was logged and ignored. The blocking path I tested was a structured response from a successful hook invocation:</p>
+  <pre class="out">{"decision":"deny"}</pre>
+  <p>The interesting part is that Gemini's hook system also gives an authorization layer an ask path. In my testing, an ask decision caused Gemini to display its own confirmation dialog, including when running in YOLO mode. It also showed the confirmation again after the person selected "Allow for this session".</p>
+  <p>Another limitation I encountered is that the hook events did not give Yenop a per-call identifier that could simply be carried through the complete decision lifecycle. The adapter therefore has to correlate the decision using the available session, tool and argument information.</p>
+  <p>This is exactly the kind of runtime-specific detail that isn't obvious if you're trying to build one authorization model across multiple agents.</p>
+
+  <h2>Codex CLI: the hook path I tested has no ask</h2>
+  <p class="ver">Codex CLI 0.155.1</p>
+  <p>In the hook path I tested, Codex gave the authorization layer a continue/block boundary rather than an inline ask decision:</p>
+  <ul class="plain"><li>remain silent → allow, continue</li><li>exit 2 with a reason → block</li></ul>
+  <p>That is different from the approval flow exposed by the other runtimes.</p>
+  <p>Codex also disables a hook until the person trusts it. In my first session, that happened without an obvious indication in the execution flow. That led to another important distinction: <b>installed and enforcing are different states.</b> Yenop therefore has to account for the runtime's own trust state rather than assuming that a configured hook is necessarily active.</p>
+  <p>There is another implementation detail with <code>apply_patch</code>: the tool input arrives as patch text rather than a simple list of files. To enforce file-level policy, the adapter has to parse the patch and evaluate the files it touches, using the strictest applicable decision.</p>
+
+  <h2>Models refuse by name, not by meaning</h2>
+  <p>I also wanted to see what happened when I left the decision entirely to the model.</p>
+  <p>Gemini Flash-Lite and Grok both declined to read <code>.env</code> in my tests, with a short explanation about credentials before making the tool call. Both subsequently read <code>.npmrc</code>, which in my environment contained an npm authentication token.</p>
+  <p>That distinction is the reason I don't consider a model's refusal to be an authorization boundary. <b>A model's refusal is a mood.</b> The model can make a reasonable semantic judgment, but if the boundary matters, something outside the model needs to evaluate the actual action: the command, path, tool and relevant context.</p>
+
+  <h2>I got caught by my own rule</h2>
+  <p>This one was particularly useful. Code passed to an interpreter such as:</p>
+  <pre class="out">python3 - &lt;&lt;EOF
+...
+EOF</pre>
+  <p>or <code>node -e '...'</code> is treated as opaque by my current policy and held for a person. That's intentional: an interpreter is a classic way to move an otherwise blocked operation into a string passed to a runtime. But my own build scripts use exactly these patterns. So they ask every time.</p>
+  <p>It's the right call and it's still annoying. And that is the calibration problem in one line: a useful authorization layer cannot simply maximize the number of things it blocks. The rules have to be tuned against real developer workflows, including how often a person allows something that the policy held for review.</p>
+
+  <h2>Versions and test environment</h2>
+  <p>Everything above was observed in live sessions against the following releases. The recorded hook events are also the test fixtures used by the adapters.</p>
+  <div class="tbl"><table>
+    <thead><tr><th>Runtime</th><th>Version</th><th>Date</th><th>What the session established</th></tr></thead>
+    <tbody>
+      <tr><td>Claude Code</td><td class="mono">2.1.282</td><td>2026-09</td><td>PreToolUse decides; ask and deny honored; outcomes attach to the decision.</td></tr>
+      <tr><td>Cursor</td><td class="mono">3.21.18</td><td>2026-09-23</td><td>preToolUse observed first for every tested tool; Skip was not exposed distinctly to hooks.</td></tr>
+      <tr><td>Gemini CLI</td><td class="mono">0.60.0</td><td>2026-09-23</td><td>ask survived YOLO and "Allow for this session"; exit code 1 was non-blocking in the tested path; failed hooks were ignored.</td></tr>
+      <tr><td>Codex CLI</td><td class="mono">0.155.1</td><td>2026-09-20</td><td>No ask in the tested hook path; trust state affected enforcement; apply_patch arrived as text.</td></tr>
+    </tbody>
+  </table></div>
+  <p>The recording linked below uses Gemini CLI 0.61.0, which was updated between the verified 0.60.0 session and the recording. That distinction is deliberate: this article reports the version I actually used for the verified observations, rather than silently replacing it with a newer release.</p>
+
+  <h2>What this means for an independent authorization layer</h2>
+  <p>The interesting thing wasn't that one runtime was "better" or "worse". It was that the same conceptual operation, judge an agent's intended action before execution, has different interception points, decision semantics, failure behavior and trust models across runtimes. None of these observations by themselves means that a runtime's built-in controls are inadequate. They mean that an independent authorization layer has to understand the runtime-specific enforcement model rather than assuming that a generic hook abstraction is enough. That makes a common authorization layer surprisingly non-trivial. The layer has to normalize:</p>
+  <pre class="flow">Agent intent
+     ↓
+Runtime-specific hook
+     ↓
+Canonical action
+     ↓
+Authorization policy
+     ↓
+ALLOW / ASK / DENY
+     ↓
+Runtime-specific enforcement
+     ↓
+Tool execution</pre>
+  <p>That's what led me to build Yenop. Yenop is a local execution authorization layer for AI agents. It sits outside the agent runtime and translates these runtime-specific execution paths into a common authorization model. It's pre-alpha and source-available. It runs locally; source code, prompts and commands don't leave the machine, and telemetry is off unless explicitly enabled.</p>
+
+  <h2>Seeing it</h2>
+  <p>I recorded a 40-second unedited Gemini session showing the layer in front of the agent: allow → deny → ask → report. <a href="https://youtu.be/5Vs59FOzp7E" target="_blank" rel="noopener">Watch the 40-second demo</a>.</p>
+  <p>If you run any of these agents daily, I'd especially like you to run Yenop in observe mode on one real repo for a week. It blocks nothing; it only records what the authorization layer would have allowed, asked about or denied.</p>
+  <p>I'm particularly interested in false positives, false negatives, bypasses, and decisions that are technically correct but painful in a real workflow. That's the part I can't learn alone.</p>
+  <div class="cta" style="margin-top:22px"><span class="install mono"><b>$</b> <span class="cmdtext">npm install -g yenop &amp;&amp; yenop init</span></span><a class="btn" href="https://github.com/yenopdev/yenop" target="_blank" rel="noopener">View the source</a><a class="btn" href="https://github.com/yenopdev/yenop/discussions" target="_blank" rel="noopener">Discussions</a></div>
+</article>
+</main>
+<footer><div class="wrap"><span>Yenop · pre-alpha, developer preview · source-available (FSL-1.1-ALv2)</span><span><a href="../../">Home</a> · <a href="../">Blog</a> · <a href="../../security/">Security</a> · <a href="https://github.com/yenopdev/yenop" target="_blank" rel="noopener">GitHub</a></span></div></footer>
+</body>
+</html>

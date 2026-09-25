@@ -119,6 +119,17 @@ const runShell = tool({ name: "run_shell", /* ... */ inputGuardrails: guard.inpu
 
 Your tools are your own functions, so `tools` says what each can do; one you leave out is judged as unknown and held for a person. A guardrail cannot ask anyone by itself: `onAsk` is where you route an ask, and without it an ask is refused, never let through. A deny reaches the agent as a rejection with the reason, so it can do something else, or as the SDK's tripwire exception with `onDeny: "throw"`. One SDK run is one Yenop run, so the run-level rules follow the agent across its calls. No dependency on the SDK: the types are structural, checked against `@openai/agents-core` 0.18.0, and verified with the real SDK: [`examples/openai-agents/`](examples/openai-agents/) is a forty-line agent whose `npm test` ran, whose `.npmrc` read was refused with the reason handed back to the model, and whose `rm -rf build` waited on a person in the terminal.
 
+**Verified against.** Each adapter was exercised in a live session against the release below; the recorded hook events are the fixtures in [`fixtures/hooks/`](fixtures/hooks/). What was found in those sessions is stated next to it, because it decides how the adapter answers.
+
+| Runtime | Version tested | Date | What the session established |
+|---|---|---|---|
+| Claude Code | 2.1.282 | 2026-09 | PreToolUse decides; ask and deny honoured; outcome events attach to the decision. |
+| Codex CLI | 0.155.1 | 2026-09-20 | No ask from a hook: block with exit 2 and a reason. Codex disables a hook until the person trusts it, silently; `apply_patch` arrives as text under `tool_input.command`. |
+| Gemini CLI | 0.60.0 | 2026-09-23 | `ask` forces Gemini's own dialog even in YOLO mode, and again after "Allow for this session". Exit code 1 is an allow; a failed or timed-out hook is ignored, so every verdict is JSON on exit 0. |
+| Cursor | 3.21.18 | 2026-09-23 | `preToolUse` fires first for every tool and can only allow or deny; a silent hook there blocks under failClosed. A skipped command is reported like a successful one. |
+| OpenAI Agents SDK | `@openai/agents` 0.18.0 | 2026-09-23 | Input and output tool guardrails; `onAsk` routes approvals; one run per `run()`. |
+| MCP gateway | protocol 2025-06 and 2026 elicitation | 2026-09-18 | Every `tools/call` judged; asks through elicitation where the client supports it. |
+
 **Any MCP agent: the gateway.** Point the client at Yenop instead of at the tool server:
 
 ```json

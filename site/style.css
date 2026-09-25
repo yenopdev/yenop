@@ -103,6 +103,27 @@ footer .wrap{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap}
 .player .play:hover{transform:translate(-50%,-50%) scale(1.06);background:rgba(11,15,20,.9)}
 .player .play:focus-visible{outline:2px solid var(--link);outline-offset:3px}
 @media (prefers-reduced-motion:reduce){.player .play{transition:none}}
+/* blog */
+.post{max-width:72ch;padding-block:56px 40px}
+.post h1{font-size:clamp(30px,4vw,44px);max-width:none}
+.post h2{font-size:22px;margin:40px 0 10px}
+.post p{color:var(--muted);font-size:17px;line-height:1.65;margin:0 0 16px}
+.post p a{text-decoration:underline;text-underline-offset:3px}
+.post code{font-family:"IBM Plex Mono",monospace;font-size:.92em;background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:1px 6px;color:var(--fg)}
+.post table{font-size:13.5px;margin-top:12px}
+.post td{white-space:normal;color:var(--muted)}
+.post td.mono{white-space:nowrap;color:var(--fg)}
+.post .lede{color:var(--muted)}
+.post .q{color:var(--fg);font-size:18px;border-left:3px solid var(--ask);padding-left:14px}
+.post .ver{font-family:"IBM Plex Mono",monospace;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--dim);margin:-4px 0 12px}
+.post pre.out{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:12px 14px;font-family:"IBM Plex Mono",monospace;font-size:13.5px;color:#C9D6E3;overflow-x:auto;margin:0 0 16px}
+.post pre.flow{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:16px 18px;font-family:"IBM Plex Mono",monospace;font-size:13.5px;color:var(--fg);line-height:1.6;margin:0 0 16px;overflow-x:auto}
+.post ul.plain{color:var(--muted);font-size:17px;line-height:1.65;margin:0 0 16px;padding-left:22px}
+.posts{list-style:none;padding:0;margin:0;display:grid;gap:22px}
+.posts li{padding:22px 24px;background:var(--panel);border:1px solid var(--line);border-radius:10px}
+.posts h2{font-size:22px;margin:6px 0 8px;color:var(--fg)}
+.posts a:hover h2{text-decoration:underline}
+.posts p{color:var(--muted);margin:0}
 /* works-with tiles with marks */
 .logo{display:flex;flex-direction:column;align-items:center;gap:10px}
 .logo svg{width:28px;height:28px;fill:var(--fg)}
