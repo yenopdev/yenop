@@ -112,6 +112,10 @@ class InstanceCache {
   size(): number {
     return this.byCwd.size;
   }
+  /** The project directories this daemon has decided for (the home instance has none). */
+  cwds(): string[] {
+    return [...this.byCwd.keys()].filter((k) => k !== "");
+  }
   clear(): void {
     for (const v of this.byCwd.values()) v.y.close();
     this.byCwd.clear();
@@ -313,7 +317,9 @@ export async function startDaemon(opts: DaemonOptions = {}): Promise<RunningDaem
       const t = readTelemetry(home);
       if (!dueForDaily(t)) return;
       const y = cache.get(undefined);
-      const payload = toTelemetry(buildReport(y.config, { days: 1, all: true }), t.installId!, expectedBuildId() === "unknown" ? "0.0.0" : pkgVersion(), hookedRuntimes());
+      // Hooks are usually registered per project, so look in every project this daemon has served, plus the user level.
+      const hooked = [...new Set([...hookedRuntimes(), ...cache.cwds().flatMap((c) => hookedRuntimes(c))])];
+      const payload = toTelemetry(buildReport(y.config, { days: 1, all: true }), t.installId!, expectedBuildId() === "unknown" ? "0.0.0" : pkgVersion(), hooked);
       if (await sendTelemetry(t.endpoint ?? DEFAULT_TELEMETRY_ENDPOINT, payload)) writeTelemetry(home, { ...t, lastSentAt: new Date().toISOString() });
     } catch {
       /* telemetry must never affect the daemon */
