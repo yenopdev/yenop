@@ -77,7 +77,14 @@ yenop viewer --open
 
 A read-only web page of the receipts, on this machine only, updating every couple of seconds: green allowed, amber needs a person, red blocked, each with the reason and the recorded answer. Off the decision path, writes nothing. Put it beside your agent during a demo.
 
-Roll it out without breaking anyone's flow: **observe mode** records decisions without blocking. Run it for a week, read what would have been stopped, tune the policies, then switch to enforce.
+Roll it out without breaking anyone's flow: **observe mode** records decisions without blocking.
+
+```sh
+yenop init --mode observe   # in the project; nothing is blocked, everything is recorded
+yenop init --mode enforce   # when the report looks right
+```
+
+Run it for a week, read what would have been stopped, tune the policies, then switch to enforce.
 
 ## Read the week
 
