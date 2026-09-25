@@ -38,7 +38,7 @@
   <p class="lede">A local layer between your coding agent and your machine. Every command, file access and tool call is judged before it runs: allowed silently, held for you, or denied with the rule named. Same rules for every agent. Nothing leaves your machine.</p>
   <div class="cta">
     <span class="install mono"><b>$</b> <span class="cmdtext">npm install -g yenop &amp;&amp; yenop init</span> <button type="button" data-copy aria-label="Copy the install command">copy</button></span>
-    <a class="btn primary" href="https://youtu.be/5Vs59FOzp7E" target="_blank" rel="noopener">Watch the 40-second demo</a>
+    <a class="btn primary" href="#video">Watch the 40-second demo</a>
     <a class="btn" href="security/">Read the threat model</a>
   </div>
   <p class="small">Requires Node 22.13 or later. macOS, Linux and Windows.</p>
@@ -81,6 +81,18 @@
   </div>
 </section>
 
+<section id="video">
+  <div class="two">
+    <div><div class="eyebrow">Forty seconds</div><h2>One session, no cuts.</h2></div>
+    <div><p>Gemini CLI in a throwaway project with auto-approve on and no sandbox, so the only thing standing between the agent and the machine is Yenop. An ordinary command passes, a secret read is denied with the rule named, a destructive command is held for a person with the run's history, then the report.</p></div>
+  </div>
+  <div class="player" data-video="5Vs59FOzp7E">
+    <img src="demo-poster.jpg" width="1280" height="720" alt="Gemini CLI asking for approval of rm -rf build, with Yenop's reason and the run history, beside the live receipts">
+    <button type="button" class="play" aria-label="Play the demo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></button>
+  </div>
+  <p class="small">Nothing loads from YouTube until you press play; then the player comes from youtube-nocookie.com. <a href="https://youtu.be/5Vs59FOzp7E" target="_blank" rel="noopener">Open on YouTube</a></p>
+</section>
+
 <section id="why">
   <div class="two">
     <div><div class="eyebrow">The problem</div><h2>The agent's permission prompt is the agent asking itself.</h2></div>
@@ -97,7 +109,7 @@
 <section id="local">
   <div class="two">
     <div><div class="eyebrow">Local-first</div><h2>Your commands, prompts and source stay on your machine.</h2></div>
-    <div><p>Decisions are made on your machine by a deterministic engine; the daemon listens on 127.0.0.1 only and needs a token. Policies are files you can read, receipts are a file you own, and nothing about your work is sent anywhere: no source, no prompts, no commands, no hostnames.</p><p>Telemetry is off until you turn it on. When you do, it sends counts, never content, and <span class="mono">yenop telemetry status</span> prints exactly what would leave. The same rule applies to this page: it loads nothing from anyone else, no analytics, no third-party fonts or scripts.</p><p><a href="security/">What leaves your machine, in full, on the security page.</a></p></div>
+    <div><p>Decisions are made on your machine by a deterministic engine; the daemon listens on 127.0.0.1 only and needs a token. Policies are files you can read, receipts are a file you own, and nothing about your work is sent anywhere: no source, no prompts, no commands, no hostnames.</p><p>Telemetry is off until you turn it on. When you do, it sends counts, never content, and <span class="mono">yenop telemetry status</span> prints exactly what would leave. The same rule applies to this page: it loads nothing from anyone else, no analytics, no third-party fonts or scripts, until you press play on the demo, which then loads the video from YouTube.</p><p><a href="security/">What leaves your machine, in full, on the security page.</a></p></div>
   </div>
 </section>
 
@@ -183,6 +195,12 @@ Denies by rule
 <footer><div class="wrap"><span>Yenop · pre-alpha, developer preview · source-available (FSL-1.1-ALv2)</span><span><a href="https://github.com/yenopdev/yenop" target="_blank" rel="noopener">GitHub</a> · <a href="https://www.npmjs.com/package/yenop" target="_blank" rel="noopener">npm</a> · <a href="https://github.com/yenopdev/yenop/discussions" target="_blank" rel="noopener">Discussions</a> · <a href="security/">Security</a> · security@yenop.com</span></div></footer>
 
 <script>
+for (const p of document.querySelectorAll(".player[data-video]")) p.querySelector(".play").addEventListener("click", () => {
+  const f = document.createElement("iframe");
+  f.src = `https://www.youtube-nocookie.com/embed/${p.dataset.video}?autoplay=1&rel=0`;
+  f.title = "Yenop demo"; f.allow = "autoplay; encrypted-media; picture-in-picture; fullscreen"; f.setAttribute("allowfullscreen", "");
+  p.replaceChildren(f);
+});
 for (const b of document.querySelectorAll("[data-copy]")) b.addEventListener("click", async () => {
   const text = b.parentElement.querySelector(".cmdtext").textContent;
   try { await navigator.clipboard.writeText(text); b.textContent = "copied"; } catch { b.textContent = "select and copy"; }
