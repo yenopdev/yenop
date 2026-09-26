@@ -232,7 +232,8 @@ async function main(argv: string[]): Promise<number> {
         };
         const cover = (project: string, user: string, marker: string): string =>
           hooked(project, marker) ? "project" : hooked(user, marker) ? "user" : "no";
-        const claude = cover(join(process.cwd(), ".claude", "settings.local.json"), join(homedir(), ".claude", "settings.json"), "hook claude-code");
+        // The installer writes settings.local.json; a project may instead check in a portable hook in settings.json.
+        const claude = hooked(join(process.cwd(), ".claude", "settings.json"), "hook claude-code") ? "project" : cover(join(process.cwd(), ".claude", "settings.local.json"), join(homedir(), ".claude", "settings.json"), "hook claude-code");
         const cursor = cover(join(process.cwd(), ".cursor", "hooks.json"), join(homedir(), ".cursor", "hooks.json"), "hook cursor");
         const codexPath = hooked(join(process.cwd(), ".codex", "hooks.json"), "hook codex") ? join(process.cwd(), ".codex", "hooks.json") : hooked(join(homedir(), ".codex", "hooks.json"), "hook codex") ? join(homedir(), ".codex", "hooks.json") : undefined;
         const codex = codexPath === undefined ? "no" : codexPath.startsWith(homedir() + "/.codex") ? "user" : "project";
@@ -555,13 +556,13 @@ function openInBrowser(url: string): void {
 }
 
 async function shareReport(h: string, r: import("../core/index.js").Report): Promise<number> {
-  const { readTelemetry, toTelemetry, sendTelemetry, hookedRuntimes, DEFAULT_TELEMETRY_ENDPOINT } = await import("../core/index.js");
+  const { readTelemetry, toTelemetry, sendTelemetry, hookedRuntimes, unionHooked, DEFAULT_TELEMETRY_ENDPOINT } = await import("../core/index.js");
   const t = readTelemetry(h);
   if (!t.enabled || !t.installId) {
     process.stdout.write(`\nNot sent: telemetry is off. Turn it on with "yenop telemetry enable" (aggregate numbers only; "yenop telemetry status" shows exactly what would be sent).\n`);
     return 1;
   }
-  const payload = toTelemetry(r, t.installId, PKG_VERSION, hookedRuntimes(process.cwd()));
+  const payload = toTelemetry(r, t.installId, PKG_VERSION, unionHooked(hookedRuntimes(process.cwd()), r.byRuntime));
   const ok = await sendTelemetry(t.endpoint ?? DEFAULT_TELEMETRY_ENDPOINT, payload);
   process.stdout.write(ok ? `\nSent the numbers above (no commands, paths, prompts or names). Thank you.\n` : `\nCould not reach the telemetry endpoint; nothing was sent. Try again later or share the report by hand at https://github.com/yenopdev/yenop/discussions\n`);
   return ok ? 0 : 1;
@@ -570,7 +571,7 @@ async function shareReport(h: string, r: import("../core/index.js").Report): Pro
 /** Which runtimes have a Yenop hook registered for the current project or user. Names only. */
 
 async function telemetryCommand(sub: string | undefined, args: string[] = []): Promise<number> {
-  const { readTelemetry, enableTelemetry, disableTelemetry, resetInstallId, toTelemetry, buildReport, openYenop, hookedRuntimes, DEFAULT_TELEMETRY_ENDPOINT } = await import("../core/index.js");
+  const { readTelemetry, enableTelemetry, disableTelemetry, resetInstallId, toTelemetry, buildReport, openYenop, hookedRuntimes, unionHooked, DEFAULT_TELEMETRY_ENDPOINT } = await import("../core/index.js");
   const h = home();
   switch (sub) {
     case "enable": {
@@ -604,7 +605,8 @@ async function telemetryCommand(sub: string | undefined, args: string[] = []): P
       process.stdout.write(`telemetry: ${s.enabled ? "on" : "off"}${s.installId ? `  install id ${s.installId}` : ""}${s.endpoint ? `  endpoint ${s.endpoint}` : `  endpoint ${DEFAULT_TELEMETRY_ENDPOINT}`}${s.lastSentAt ? `  last sent ${s.lastSentAt}` : ""}\n`);
       const y = openYenop({ cwd: process.cwd(), dryRun: true });
       try {
-        const payload = toTelemetry(buildReport(y.config, { days: 7 }), s.installId ?? "inst_(assigned on enable)", PKG_VERSION, hookedRuntimes(process.cwd()));
+        const r = buildReport(y.config, { days: 7 });
+        const payload = toTelemetry(r, s.installId ?? "inst_(assigned on enable)", PKG_VERSION, unionHooked(hookedRuntimes(process.cwd()), r.byRuntime));
         process.stdout.write(`\nExactly what would be sent (last 7 days):\n${JSON.stringify(payload, null, 2)}\n`);
       } finally {
         y.close();

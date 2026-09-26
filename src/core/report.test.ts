@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openYenop, type Yenop } from "./index.js";
 import { buildReport, renderReport } from "./report.js";
-import { toTelemetry, readTelemetry, enableTelemetry, disableTelemetry, resetInstallId, dueForDaily } from "./telemetry.js";
+import { toTelemetry, readTelemetry, enableTelemetry, disableTelemetry, resetInstallId, dueForDaily, unionHooked } from "./telemetry.js";
 
 let home: string;
 let y: Yenop;
@@ -108,5 +108,17 @@ describe("telemetry", () => {
     expect(dueForDaily({ enabled: true, installId: "i", lastSentAt: justSent })).toBe(false);
     const yesterday = new Date(Date.now() - 25 * 3600 * 1000).toISOString();
     expect(dueForDaily({ enabled: true, installId: "i", lastSentAt: yesterday })).toBe(true);
+  });
+});
+
+describe("unionHooked", () => {
+  it("adds every runtime that delivered an action to the ones found in hook files", () => {
+    expect(unionHooked(["gemini"], { "claude-code": 63, cursor: 2 })).toEqual(["claude-code", "cursor", "gemini"]);
+  });
+  it("ignores runtimes with no actions, ids the receiver would reject, and duplicates", () => {
+    expect(unionHooked(["cursor"], { cursor: 5, codex: 0, t: 2, "Bad Id": 9, "": 1 })).toEqual(["cursor"]);
+  });
+  it("is the file list alone when nothing ran", () => {
+    expect(unionHooked(["codex", "gemini"], {})).toEqual(["codex", "gemini"]);
   });
 });

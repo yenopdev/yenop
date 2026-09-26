@@ -15,7 +15,7 @@ import { homedir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { openYenop, type Yenop, type DecisionRequest } from "../core/index.js";
-import { readTelemetry, writeTelemetry, dueForDaily, toTelemetry, sendTelemetry, buildReport, hookedRuntimes, DEFAULT_TELEMETRY_ENDPOINT } from "../core/index.js";
+import { readTelemetry, writeTelemetry, dueForDaily, toTelemetry, sendTelemetry, buildReport, hookedRuntimes, unionHooked, DEFAULT_TELEMETRY_ENDPOINT } from "../core/index.js";
 import { expectedBuildId } from "./client.js";
 import { hookTranslator } from "../adapters/hooks/registry.js";
 import { decideEvent, eventCwd } from "../adapters/hooks/pipeline.js";
@@ -317,8 +317,10 @@ export async function startDaemon(opts: DaemonOptions = {}): Promise<RunningDaem
       const t = readTelemetry(home);
       if (!dueForDaily(t)) return;
       const y = cache.get(undefined);
-      // Hooks are usually registered per project, so look in every project this daemon has served, plus the user level.
-      const hooked = [...new Set([...hookedRuntimes(), ...cache.cwds().flatMap((c) => hookedRuntimes(c))])];
+      // Hooks are usually registered per project, so look in every project this daemon has served, plus the user
+      // level; and count every runtime that delivered an action in the last 30 days, because this daemon may have
+      // just restarted with an empty list of served projects (it exits whenever the build on disk changes).
+      const hooked = unionHooked([...hookedRuntimes(), ...cache.cwds().flatMap((c) => hookedRuntimes(c))], buildReport(y.config, { days: 30, all: true }).byRuntime);
       const payload = toTelemetry(buildReport(y.config, { days: 1, all: true }), t.installId!, expectedBuildId() === "unknown" ? "0.0.0" : pkgVersion(), hooked);
       if (await sendTelemetry(t.endpoint ?? DEFAULT_TELEMETRY_ENDPOINT, payload)) writeTelemetry(home, { ...t, lastSentAt: new Date().toISOString() });
     } catch {

@@ -20,7 +20,7 @@ export { CONFIG_VERSION, resolveTenant, localTenantId } from "./config.js";
 export { STATE_VERSION, REPLAY_WINDOW_MS } from "./state.js";
 export { SqliteRunState, MemoryRunState } from "./state.js";
 export { buildReport, renderReport, type Report } from "./report.js";
-export { readTelemetry, writeTelemetry, enableTelemetry, disableTelemetry, resetInstallId, toTelemetry, sendTelemetry, dueForDaily, hookedRuntimes, DEFAULT_TELEMETRY_ENDPOINT, type TelemetryState, type TelemetryPayload } from "./telemetry.js";
+export { readTelemetry, writeTelemetry, enableTelemetry, disableTelemetry, resetInstallId, toTelemetry, sendTelemetry, dueForDaily, hookedRuntimes, unionHooked, DEFAULT_TELEMETRY_ENDPOINT, type TelemetryState, type TelemetryPayload } from "./telemetry.js";
 export { JsonlReceipts, NullReceipts, readReceipts, readAllReceipts, answersFor, isOutcome, summarizeCall, verifyReceipts, RECEIPT_GENESIS, type ChainCheck } from "./receipts.js";
 
 /** Directory of the default policy pack shipped with the package. */

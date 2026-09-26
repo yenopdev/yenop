@@ -172,6 +172,19 @@ export function hookedRuntimes(cwd?: string): string[] {
   return [...out];
 }
 
+/**
+ * The runtimes to report as hooked: the ones the hook files name (`hookedRuntimes`, user level and every project
+ * directory the caller knows about) plus every runtime that actually delivered an action in the report. The file
+ * check alone under-reports: the daemon restarts whenever the build changes and its list of served projects starts
+ * empty, and a hook can live in a settings file the check does not read. A recorded action cannot be wrong about a
+ * runtime being hooked. Names only, never paths; ids are validated the same way the receiver validates them.
+ */
+export function unionHooked(fromFiles: string[], byRuntime: Record<string, number>): string[] {
+  const out = new Set<string>(fromFiles);
+  for (const [k, n] of Object.entries(byRuntime)) if (n > 0 && /^[a-z][a-z-]{1,31}$/.test(k)) out.add(k);
+  return [...out].sort();
+}
+
 /** Has it been at least a day since the last send? The daemon uses this so a send is at most daily. */
 export function dueForDaily(s: TelemetryState, now = Date.now()): boolean {
   if (!s.enabled || !s.installId) return false;
