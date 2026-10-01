@@ -5,7 +5,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { readdirSync, readFileSync, mkdtempSync, rmSync, mkdirSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { tmpdir, homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { openYenop, type Yenop } from "../../core/index.js";
@@ -42,6 +42,19 @@ describe("hook fixtures replay", () => {
   it("has a fixture directory for every hookable runtime, and no directory for an unknown one", () => {
     for (const r of hookRuntimes()) expect(runtimes, `fixtures/hooks/${r} missing`).toContain(r);
     for (const r of runtimes) expect(hookRuntimes(), `fixtures/hooks/${r} has no translator`).toContain(r);
+  });
+
+  it("names no real machine in any fixture: project paths are __PROJECT__, never an absolute home directory", () => {
+    // Fixtures are public. A recorded event can carry the machine's path in cwd, workspace_roots, or inside the
+    // model's own command; promote-fixture.mjs replaces them, and this is the guard that it did, for every file.
+    const homeDirs = [/\/Users\/[^/"\\]+/, /\/home\/[^/"\\]+/, /[A-Za-z]:\\\\Users\\\\[^\\"]+/];
+    for (const runtime of runtimes) {
+      for (const file of readdirSync(join(root, runtime)).filter((f) => f.endsWith(".json"))) {
+        const text = readFileSync(join(root, runtime, file), "utf8");
+        expect(text, `${runtime}/${file} contains this machine's home directory`).not.toContain(homedir());
+        for (const re of homeDirs) expect(text, `${runtime}/${file} contains an absolute home path (${re})`).not.toMatch(re);
+      }
+    }
   });
 
   for (const runtime of runtimes) {

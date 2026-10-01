@@ -14,7 +14,7 @@
     "model": "grok-4.6",
     "tool_name": "Shell",
     "tool_input": {
-      "command": "rm -rf /Users/ertuncvarol/yenop-playground/build",
+      "command": "rm -rf __PROJECT__/build",
       "cwd": "",
       "timeout": 30000
     },
@@ -24,7 +24,7 @@
     "hook_event_name": "preToolUse",
     "cursor_version": "3.21.18",
     "workspace_roots": [
-      "/Users/ertuncvarol/yenop-playground"
+      "__PROJECT__"
     ],
     "user_email": "REDACTED",
     "transcript_path": "REDACTED"

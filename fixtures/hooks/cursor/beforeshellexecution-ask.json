@@ -12,14 +12,14 @@
     "conversation_id": "928d391c-dc2e-4eca-bf80-e04f525b83f0",
     "generation_id": "f7b36ff9-a944-4967-af99-ebf66cd0cd78",
     "model": "grok-4.6",
-    "command": "rm -rf /Users/ertuncvarol/yenop-playground/build",
+    "command": "rm -rf __PROJECT__/build",
     "cwd": "",
     "sandbox": false,
     "session_id": "928d391c-dc2e-4eca-bf80-e04f525b83f0",
     "hook_event_name": "beforeShellExecution",
     "cursor_version": "3.21.18",
     "workspace_roots": [
-      "/Users/ertuncvarol/yenop-playground"
+      "__PROJECT__"
     ],
     "user_email": "REDACTED",
     "transcript_path": "REDACTED"
