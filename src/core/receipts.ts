@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync, existsSync, readFileSync } from "node:fs";
+import { appendFileSync, mkdirSync, existsSync, readFileSync, rmdirSync, statSync, openSync, readSync, closeSync, fstatSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { dirname } from "node:path";
 import type { OutcomeReceipt, Receipt, ReceiptSink } from "./types.js";
@@ -43,26 +43,90 @@ function sha256(s: string): string {
  * tail is caught by anchoring the head elsewhere (the control plane, later). Documented as such.
  */
 export class JsonlReceipts implements ReceiptSink {
-  private prevHash: string;
   constructor(private path: string) {
     const dir = dirname(path);
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-    this.prevHash = lastLineHash(path);
   }
+  /**
+   * One receipts file can have several writers at once: hooks deciding in-process while the daemon starts,
+   * or a runtime that calls its hooks for parallel tool calls (Gemini CLI does). A cached `prev` would then
+   * be stale for all but one of them and the chain would read as tampered although every line is genuine
+   * (seen live, 2026-10-02). So every append takes an exclusive lock, re-reads the tail under it, writes, and
+   * releases. The lock is a directory beside the file: `mkdir` is atomic on every platform Node supports.
+   */
   append(receipt: Receipt | OutcomeReceipt): void {
-    const line = JSON.stringify({ ...receipt, prev: this.prevHash });
-    appendFileSync(this.path, line + "\n", "utf8");
-    this.prevHash = sha256(line);
+    withReceiptsLock(this.path, () => {
+      const line = JSON.stringify({ ...receipt, prev: lastLineHash(this.path) });
+      appendFileSync(this.path, line + "\n", "utf8");
+    });
   }
   close(): void {}
+}
+
+/** How long a lock may be held before another writer treats it as abandoned (a crashed process). */
+export const RECEIPTS_LOCK_STALE_MS = 5000;
+const LOCK_WAIT_MS = 10_000;
+
+/** Run `fn` holding the exclusive append lock for `path`. Waits for a live holder; breaks a stale one. */
+export function withReceiptsLock<T>(path: string, fn: () => T): T {
+  const lock = `${path}.lock`;
+  const deadline = Date.now() + LOCK_WAIT_MS;
+  for (;;) {
+    try {
+      mkdirSync(lock);
+      break;
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
+      try {
+        if (Date.now() - statSync(lock).mtimeMs > RECEIPTS_LOCK_STALE_MS) {
+          rmdirSync(lock); // a holder that died keeps nobody else out for longer than the stale window
+          continue;
+        }
+      } catch {
+        /* the holder released between our check and ours: retry at once */
+        continue;
+      }
+      if (Date.now() > deadline) throw new Error(`receipts lock held for more than ${LOCK_WAIT_MS} ms: ${lock}`);
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 2); // 2 ms, synchronous
+    }
+  }
+  try {
+    return fn();
+  } finally {
+    try {
+      rmdirSync(lock);
+    } catch {
+      /* already removed as stale by a waiter that outlived our window; nothing to do */
+    }
+  }
 }
 
 /** The chain hash to continue from: SHA-256 of the last line, or the genesis anchor for an empty/new file. */
 function lastLineHash(path: string): string {
   if (!existsSync(path)) return RECEIPT_GENESIS;
-  const lines = readFileSync(path, "utf8").split("\n").filter((l) => l.length > 0);
-  const last = lines[lines.length - 1];
+  const last = lastLine(path);
   return last ? sha256(last) : RECEIPT_GENESIS;
+}
+
+/** The last non-empty line of a file, reading only its tail: an append must not re-read a growing file. */
+function lastLine(path: string): string {
+  const fd = openSync(path, "r");
+  try {
+    const size = fstatSync(fd).size;
+    let chunk = 64 * 1024;
+    for (;;) {
+      const start = Math.max(0, size - chunk);
+      const buf = Buffer.alloc(size - start);
+      readSync(fd, buf, 0, buf.length, start);
+      const text = buf.toString("utf8").replace(/\n+$/, "");
+      const nl = text.lastIndexOf("\n");
+      if (nl >= 0) return text.slice(nl + 1);
+      if (start === 0) return text; // the whole file is one line (or empty)
+      chunk *= 4;
+    }
+  } finally {
+    closeSync(fd);
+  }
 }
 
 export interface ChainCheck {

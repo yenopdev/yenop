@@ -1,8 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, rmSync, readFileSync, writeFileSync, appendFileSync } from "node:fs";
+import { mkdtempSync, rmSync, readFileSync, writeFileSync, appendFileSync, mkdirSync, utimesSync, existsSync, statSync } from "node:fs";
+import { spawn } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { JsonlReceipts, verifyReceipts, RECEIPT_GENESIS } from "./receipts.js";
+import { JsonlReceipts, verifyReceipts, RECEIPT_GENESIS, RECEIPTS_LOCK_STALE_MS } from "./receipts.js";
 import type { Receipt } from "./types.js";
 
 let dir: string;
@@ -81,5 +83,47 @@ describe("hash-chained receipts", () => {
   });
   it("an empty or missing file is trivially intact", () => {
     expect(verifyReceipts(join(dir, "nope.jsonl"))).toEqual({ ok: true, lines: 0 });
+  });
+
+  it("two writers on one file, appending turn by turn, leave an unbroken chain (each append re-reads the tail under a lock)", () => {
+    // Before the lock, each instance cached the last-line hash at construction; a second instance opened
+    // against the same file wrote the same `prev` and the chain read as tampered. Seen live with Gemini CLI,
+    // which runs its hooks for parallel tool calls concurrently (2026-10-02).
+    const a = new JsonlReceipts(path);
+    const b = new JsonlReceipts(path); // both constructed while the file is empty
+    for (let i = 0; i < 20; i++) (i % 2 ? b : a).append(receipt(`w${i}`));
+    const check = verifyReceipts(path);
+    expect(check).toEqual({ ok: true, lines: 20 });
+    expect(existsSync(`${path}.lock`)).toBe(false);
+  });
+
+  // The writers are separate Node processes, so they load the built package, not this TypeScript. Without a
+  // build the test is reported as skipped (CI always builds first); a build older than the source is a failure
+  // with that cause named, never a misleading chain error.
+  const built = fileURLToPath(new URL("../../dist/core/receipts.js", import.meta.url));
+  it.skipIf(!existsSync(built))("two processes appending at the same time leave an unbroken chain", async () => {
+    const source = fileURLToPath(new URL("./receipts.ts", import.meta.url));
+    if (statSync(built).mtimeMs < statSync(source).mtimeMs) throw new Error("dist/ is older than src/core/receipts.ts: run `npm run build` first");
+    const script = `
+      import { JsonlReceipts } from ${JSON.stringify(built)};
+      const [path, tag] = process.argv.slice(1); // with -e, extra arguments start at argv[1]
+      const sink = new JsonlReceipts(path);
+      for (let i = 0; i < 40; i++) sink.append({ v: 1, kind: "decision", id: tag + i, ts: "t", tenant: { id: "t", name: "t" }, runId: "r", runtime: "cli", agent: "a", user: "u", tool: "Bash", toolKind: "shell", args: {}, mode: "enforce", enforced: true, effect: "allow", reasons: [], flow: {}, runBefore: {} });
+    `;
+    const children = ["p", "q"].map((tag) => spawn(process.execPath, ["--input-type=module", "-e", script, "--", path, tag], { stdio: "inherit" }));
+    await Promise.all(children.map((c) => new Promise<void>((res, rej) => c.on("exit", (code) => (code === 0 ? res() : rej(new Error(`writer exited ${code}`)))))));
+    expect(verifyReceipts(path)).toEqual({ ok: true, lines: 80 });
+    expect(existsSync(`${path}.lock`)).toBe(false);
+  });
+
+  it("a lock left behind by a dead writer is broken after the stale window, and a live one is waited for", () => {
+    const lock = `${path}.lock`;
+    mkdirSync(lock);
+    const old = new Date(Date.now() - RECEIPTS_LOCK_STALE_MS - 1000);
+    utimesSync(lock, old, old); // looks abandoned
+    const sink = new JsonlReceipts(path);
+    sink.append(receipt("after-stale"));
+    expect(verifyReceipts(path)).toEqual({ ok: true, lines: 1 });
+    expect(existsSync(lock)).toBe(false);
   });
 });
