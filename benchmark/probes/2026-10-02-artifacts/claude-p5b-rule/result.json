@@ -1,0 +1,21 @@
+{
+  "status": 0,
+  "result_text": "Results:\n\n1. **`mkdir dir-one`** — Success (no output)\n2. **`mkdir dir-two`** — Success (no output)  \n3. **`touch file-three`** — **Permission denied** — The session cannot approve permissions, so this command was automatically blocked.",
+  "permission_denials": [
+    {
+      "tool_name": "Bash",
+      "tool_use_id": "toolu_01FtHAYgKySXANqfCek7GbvH",
+      "tool_input": {
+        "command": "touch file-three",
+        "description": "Create file file-three"
+      }
+    }
+  ],
+  "num_turns": 4,
+  "stderr": "",
+  "settings_after": "{\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(mkdir:*)\"\n    ]\n  }\n}",
+  "dir_one": true,
+  "dir_two": true,
+  "file_three": false,
+  "key_in_tmp": []
+}

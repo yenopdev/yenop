@@ -1,0 +1,50 @@
+{
+  "runtime": "claude",
+  "cmd": "claude",
+  "args": [
+    "-p",
+    "<prompt>",
+    "--output-format",
+    "json",
+    "--permission-mode",
+    "acceptEdits",
+    "--permission-prompts",
+    "none",
+    "--allowedTools",
+    "Bash",
+    "--max-turns",
+    "3",
+    "--model",
+    "claude-haiku-4-5-20251001"
+  ],
+  "status": 0,
+  "signal": null,
+  "elapsedMs": 9033,
+  "P1a_hook_received_env": {
+    "hookCalls": 1,
+    "YENOP_PROBE_MARKER": true,
+    "YENOP_HOME": true,
+    "YENOP_NO_DAEMON": true,
+    "YENOP_RECORD_HOOKS": true,
+    "PATH_has_bin_prefix": true,
+    "hook_cwd": "/private/var/folders/pw/ltsshhkd7_x9q8403zhkmkb40000gn/T/probe-claude-aCBekT/proj"
+  },
+  "P1b_P3_agent_shell": {
+    "MARKER_seen": true,
+    "YENOP_HOME_seen": true,
+    "PWD_is_project": false,
+    "terraform_resolves_to_shim": true,
+    "shim_ran": true,
+    "HOME_seen": "/var/folders/pw/ltsshhkd7_x9q8403zhkmkb40000gn/T/probe-claude-aCBekT/yenop-home",
+    "env_names": "AI_AGENT,ANTHROPIC_API_KEY,CLAUDECODE,CLAUDE_CODE_CHILD_SESSION,CLAUDE_CODE_ENTRYPOINT,CLAUDE_CODE_EXECPATH,CLAUDE_CODE_MESSAGING_SOCKET,CLAUDE_CODE_MESSAGING_TOKEN,CLAUDE_CODE_SESSION_ATTENDED,CLAUDE_CODE_SESSION_ID,CLAUDE_CONFIG_DIR,CLAUDE_PID,COREPACK_ENABLE_AUTO_PIN,GIT_EDITOR,HOME,LANG,LOGNAME,NoDefaultCurrentDirectoryInExePath,PATH,PWD,SHELL,SHLVL,TERM,YENOP_HOME,YENOP_NO_DAEMON,YENOP_PROBE_MARKER,YENOP_RECORD_HOOKS,_,"
+  },
+  "P4_claude_only": {
+    "permission_denials": []
+  },
+  "key_persisted_in_tmp_files": [],
+  "real_home_files_changed": [],
+  "tmp_home_file_count": 7,
+  "tmp_home_top_level": [
+    ".claude"
+  ]
+}

@@ -1,0 +1,18 @@
+--- hook call 1790953797
+cwd=/private/var/folders/pw/ltsshhkd7_x9q8403zhkmkb40000gn/T/probe-codex-731vmy/proj
+CODEX_MANAGED_BY_NPM=<omitted>
+CODEX_MANAGED_PACKAGE_ROOT=<omitted>
+HOME=/var/folders/pw/ltsshhkd7_x9q8403zhkmkb40000gn/T/probe-codex-731vmy/home
+LANG=<omitted>
+LOGNAME=<omitted>
+OPENAI_API_KEY=<omitted>
+PATH=/opt/homebrew/lib/node_modules/@openai/codex/node_modules/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/codex-path:/var/folders/pw/ltsshhkd7_x9q8403zhkmkb40000gn/T/probe-codex-731vmy/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/Library/Apple/usr/bin:/opt/homebrew/bin:/opt/homebrew/sbin
+PWD=/private/var/folders/pw/ltsshhkd7_x9q8403zhkmkb40000gn/T/probe-codex-731vmy/proj
+SHLVL=<omitted>
+TERM=<omitted>
+YENOP_HOME=/var/folders/pw/ltsshhkd7_x9q8403zhkmkb40000gn/T/probe-codex-731vmy/yenop-home
+YENOP_NO_DAEMON=1
+YENOP_PROBE_MARKER=p1-thngypew
+YENOP_RECORD_HOOKS=/var/folders/pw/ltsshhkd7_x9q8403zhkmkb40000gn/T/probe-codex-731vmy/rec
+_=<omitted>
+__CF_USER_TEXT_ENCODING=<omitted>

@@ -1,0 +1,4 @@
+error: invalid value 'always' for '--ask-for-approval <APPROVAL_POLICY>'
+  [possible values: on-request, never]
+
+For more information, try '--help'.

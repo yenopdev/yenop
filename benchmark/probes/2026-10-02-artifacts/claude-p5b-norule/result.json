@@ -1,0 +1,37 @@
+{
+  "status": 0,
+  "result_text": "All three commands were denied due to permission requirements:\n\n**(1) mkdir dir-one:**\n```\nPermission for this tool use was denied. It requires approval, and this session has no approval surface — nobody can answer a permission prompt here — so it was denied automatically. The action was NOT performed; do not claim it succeeded, and do not retry it: this action, and anything else that requires approval, will be denied the same way for the rest of this session. Tell the user what was blocked and why you needed it, then continue with the parts of the task that do not require approval. What required approval: mkdir in '/private/var/folders/pw/ltsshhkd7_x9q8403zhkmkb40000gn/T/p5-claude-l3TOVs/proj/dir-one' needs approval. The path is inside the working directories for this session ('/private/var/folders/pw/ltsshhkd7_x9q8403zhkmkb40000gn/T/p5-claude-l3TOVs/proj'), and Claude Code asks before a shell command creates, changes or removes files there.\n```\n\n**(2) mkdir dir-two:**\n```\nPermission for this tool use was denied. It requires approval, and this session has no approval surface — nobody can answer a permission prompt here — so it was denied automatically. The action was NOT performed; do not claim it succeeded, and do not retry it: this action, and anything else that requires approval, will be denied the same way for the rest of this session. Tell the user what was blocked and why you needed it, then continue with the parts of the task that do not require approval. What required approval: mkdir in '/private/var/folders/pw/ltsshhkd7_x9q8403zhkmkb40000gn/T/p5-claude-l3TOVs/proj/dir-two' needs approval. The path is inside the working directories for this session ('/private/var/folders/pw/ltsshhkd7_x9q8403zhkmkb40000gn/T/p5-claude-l3TOVs/proj'), and Claude Code asks before a shell command creates, changes or removed files there.\n```\n\n**(3) touch file-three:**\n```\nPermission for this tool use was denied. It requires approval, and this session has no approval surface — nobody can answer a permission prompt here — so it was denied automatically. The action was NOT performed; do not claim it succeeded, and do not retry it: this action, and anything else that requires approval, will be denied the same way for the rest of this session. Tell the user what was blocked and why you needed it, then continue with the parts of the task that do not require approval. What required approval: touch in '/private/var/folders/pw/ltsshhkd7_x9q8403zhkmkb40000gn/T/p5-claude-l3TOVs/proj/file-three' needs approval. The path is inside the working directories for this session ('/private/var/folders/pw/ltsshhkd7_x9q8403zhkmkb40000gn/T/p5-claude-l3TOVs/proj'), and Claude Code asks before a shell command creates, changes or removes files there.\n```\n\nNone of the commands executed because this session doesn't have an approval surface to grant permission for file operations in the working directory.",
+  "permission_denials": [
+    {
+      "tool_name": "Bash",
+      "tool_use_id": "toolu_01DyETxShmxidGztPvidqY5k",
+      "tool_input": {
+        "command": "mkdir dir-one",
+        "description": "Create directory dir-one"
+      }
+    },
+    {
+      "tool_name": "Bash",
+      "tool_use_id": "toolu_01XVEmiSx8Cp6BA9iAgL7KC5",
+      "tool_input": {
+        "command": "mkdir dir-two",
+        "description": "Create directory dir-two"
+      }
+    },
+    {
+      "tool_name": "Bash",
+      "tool_use_id": "toolu_0113XMZgiBpsC4x5qCvK86Qy",
+      "tool_input": {
+        "command": "touch file-three",
+        "description": "Create file file-three"
+      }
+    }
+  ],
+  "num_turns": 4,
+  "stderr": "",
+  "settings_after": "{}",
+  "dir_one": false,
+  "dir_two": false,
+  "file_three": false,
+  "key_in_tmp": []
+}

@@ -1,0 +1,39 @@
+{
+  "runtime": "codex",
+  "cmd": "codex",
+  "args": [
+    "exec",
+    "--full-auto",
+    "--skip-git-repo-check",
+    "--ephemeral",
+    "--dangerously-bypass-hook-trust",
+    "-C",
+    "/var/folders/pw/ltsshhkd7_x9q8403zhkmkb40000gn/T/probe-codex-cRXYNz/proj",
+    "--json",
+    "<prompt>"
+  ],
+  "status": 2,
+  "signal": null,
+  "elapsedMs": 2895,
+  "P1a_hook_received_env": {
+    "hookCalls": 0,
+    "YENOP_PROBE_MARKER": false,
+    "YENOP_HOME": false,
+    "YENOP_NO_DAEMON": false,
+    "YENOP_RECORD_HOOKS": false,
+    "PATH_has_bin_prefix": false
+  },
+  "P1b_P3_agent_shell": {
+    "MARKER_seen": false,
+    "YENOP_HOME_seen": false,
+    "PWD_is_project": false,
+    "terraform_resolves_to_shim": false,
+    "shim_ran": false
+  },
+  "key_persisted_in_tmp_files": [],
+  "real_home_files_changed": [],
+  "tmp_home_file_count": 5,
+  "tmp_home_top_level": [
+    ".codex"
+  ]
+}

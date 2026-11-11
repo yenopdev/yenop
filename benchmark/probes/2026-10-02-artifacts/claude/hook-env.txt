@@ -1,0 +1,27 @@
+--- hook call 1790953691
+cwd=/private/var/folders/pw/ltsshhkd7_x9q8403zhkmkb40000gn/T/probe-claude-aCBekT/proj
+AI_AGENT=<omitted>
+ANTHROPIC_API_KEY=<omitted>
+CLAUDECODE=<omitted>
+CLAUDE_CODE_CHILD_SESSION=<omitted>
+CLAUDE_CODE_ENTRYPOINT=<omitted>
+CLAUDE_CODE_MESSAGING_SOCKET=<omitted>
+CLAUDE_CODE_MESSAGING_TOKEN=<omitted>
+CLAUDE_CODE_SESSION_ATTENDED=<omitted>
+CLAUDE_CODE_SESSION_ID=<omitted>
+CLAUDE_CONFIG_DIR=/var/folders/pw/ltsshhkd7_x9q8403zhkmkb40000gn/T/probe-claude-aCBekT/home/.claude
+CLAUDE_PID=<omitted>
+CLAUDE_PROJECT_DIR=/private/var/folders/pw/ltsshhkd7_x9q8403zhkmkb40000gn/T/probe-claude-aCBekT/proj
+COREPACK_ENABLE_AUTO_PIN=<omitted>
+HOME=/var/folders/pw/ltsshhkd7_x9q8403zhkmkb40000gn/T/probe-claude-aCBekT/home
+LANG=<omitted>
+NoDefaultCurrentDirectoryInExePath=<omitted>
+PATH=/var/folders/pw/ltsshhkd7_x9q8403zhkmkb40000gn/T/probe-claude-aCBekT/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/Library/Apple/usr/bin:/opt/homebrew/bin:/opt/homebrew/sbin
+PWD=/private/var/folders/pw/ltsshhkd7_x9q8403zhkmkb40000gn/T/probe-claude-aCBekT/proj
+SHLVL=<omitted>
+TERM=<omitted>
+YENOP_HOME=/var/folders/pw/ltsshhkd7_x9q8403zhkmkb40000gn/T/probe-claude-aCBekT/yenop-home
+YENOP_NO_DAEMON=1
+YENOP_PROBE_MARKER=p1-szmhlaf0
+YENOP_RECORD_HOOKS=/var/folders/pw/ltsshhkd7_x9q8403zhkmkb40000gn/T/probe-claude-aCBekT/rec
+_=<omitted>

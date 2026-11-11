@@ -1,0 +1,41 @@
+{
+  "runtime": "gemini",
+  "cmd": "gemini",
+  "args": [
+    "-p",
+    "<prompt>",
+    "--approval-mode",
+    "yolo",
+    "-m",
+    "gemini-3.1-flash-lite",
+    "-o",
+    "json"
+  ],
+  "status": 0,
+  "signal": null,
+  "elapsedMs": 11466,
+  "P1a_hook_received_env": {
+    "hookCalls": 2,
+    "YENOP_PROBE_MARKER": true,
+    "YENOP_HOME": true,
+    "YENOP_NO_DAEMON": true,
+    "YENOP_RECORD_HOOKS": true,
+    "PATH_has_bin_prefix": true,
+    "hook_cwd": "/private/var/folders/pw/ltsshhkd7_x9q8403zhkmkb40000gn/T/probe-gemini-a8veN4/proj"
+  },
+  "P1b_P3_agent_shell": {
+    "MARKER_seen": true,
+    "YENOP_HOME_seen": true,
+    "PWD_is_project": false,
+    "terraform_resolves_to_shim": true,
+    "shim_ran": true,
+    "HOME_seen": "/var/folders/pw/ltsshhkd7_x9q8403zhkmkb40000gn/T/probe-gemini-a8veN4/yenop-home",
+    "env_names": "DBUS_SESSION_BUS_ADDRESS,DISPLAY,GCM_INTERACTIVE,GEMINI_API_KEY,GEMINI_CLI,GEMINI_CLI_NO_RELAUNCH,GH_PROMPT_DISABLED,GIT_ASKPASS,GIT_CONFIG_COUNT,GIT_CONFIG_GLOBAL,GIT_CONFIG_KEY_0,GIT_CONFIG_KEY_1,GIT_CONFIG_KEY_2,GIT_CONFIG_KEY_3,GIT_CONFIG_KEY_4,GIT_CONFIG_KEY_5,GIT_CONFIG_KEY_6,GIT_CONFIG_KEY_7,GIT_CONFIG_NOSYSTEM,GIT_CONFIG_SYSTEM,GIT_CONFIG_VALUE_0,GIT_CONFIG_VALUE_1,GIT_CONFIG_VALUE_2,GIT_CONFIG_VALUE_3,GIT_CONFIG_VALUE_4,GIT_CONFIG_VALUE_5,GIT_CONFIG_VALUE_6,GIT_CONFIG_VALUE_7,GIT_PAGER,GIT_TERMINAL_PROMPT,HOME,LANG,LC_CTYPE,PAGER,PATH,PWD,SHLVL,SSH_ASKPASS,TERM,YENOP_HOME,YENOP_NO_DAEMON,YENOP_PROBE_MARKER,YENOP_RECORD_HOOKS,_,__CF_USER_TEXT_ENCODING"
+  },
+  "key_persisted_in_tmp_files": [],
+  "real_home_files_changed": [],
+  "tmp_home_file_count": 7,
+  "tmp_home_top_level": [
+    ".gemini"
+  ]
+}

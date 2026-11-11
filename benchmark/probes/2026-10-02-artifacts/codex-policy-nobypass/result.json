@@ -1,0 +1,46 @@
+{
+  "runtime": "codex",
+  "cmd": "codex",
+  "args": [
+    "-a",
+    "on-request",
+    "exec",
+    "--skip-git-repo-check",
+    "--ephemeral",
+    "-s",
+    "workspace-write",
+    "-C",
+    "/var/folders/pw/ltsshhkd7_x9q8403zhkmkb40000gn/T/probe-codex-QwCGUW/proj",
+    "--json",
+    "<prompt>"
+  ],
+  "status": 0,
+  "signal": null,
+  "elapsedMs": 15396,
+  "P1a_hook_received_env": {
+    "hookCalls": 0,
+    "YENOP_PROBE_MARKER": false,
+    "YENOP_HOME": false,
+    "YENOP_NO_DAEMON": false,
+    "YENOP_RECORD_HOOKS": false,
+    "PATH_has_bin_prefix": false
+  },
+  "P1b_P3_agent_shell": {
+    "MARKER_seen": true,
+    "YENOP_HOME_seen": true,
+    "PWD_is_project": false,
+    "terraform_resolves_to_shim": true,
+    "shim_ran": true,
+    "HOME_seen": "$YENOP_HOME;",
+    "env_names": "$(env | cut -d= -f1 | sort | tr "
+  },
+  "key_persisted_in_tmp_files": [],
+  "real_home_files_changed": [
+    "~/.claude/projects/-Users-<user>-ehnde/a25a16ec-776d-4877-9b51-f8a7687f5c8a.jsonl",
+    "~/.claude/sessions/1306.json"
+  ],
+  "tmp_home_file_count": 5486,
+  "tmp_home_top_level": [
+    ".codex"
+  ]
+}

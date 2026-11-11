@@ -29,3 +29,10 @@ target/
 yenop-offline-*.tgz
 yenop-*.tgz
 harness/breaches/
+
+# benchmark: only the closed, published datasets are tracked. Earlier runs and runtime home copies stay local
+# (hundreds of MB, and the homes hold third-party plugin files that are not ours to redistribute).
+benchmark/results/*
+!benchmark/results/2026-10-05-series5/
+!benchmark/results/2026-10-05-series5-rerun/
+benchmark/results/**/.codex-base-home/

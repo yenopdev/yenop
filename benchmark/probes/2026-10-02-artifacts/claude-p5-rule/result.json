@@ -1,0 +1,19 @@
+{
+  "status": 0,
+  "result_text": "Here are the outputs from each command:\n\n**Command 1: `cat README.md`**\n```\nreadme-token-A\n```\n\n**Command 2: `cat notes.txt`**\n```\nnotes-token-B\n```\n\n**Command 3: `mkdir made-by-agent`**\n```\nPermission denied — this action requires approval, and the session has no approval surface to grant it.\n```",
+  "permission_denials": [
+    {
+      "tool_name": "Bash",
+      "tool_use_id": "toolu_01X4wsxxajXNUfZ7o6XrtYTN",
+      "tool_input": {
+        "command": "mkdir made-by-agent",
+        "description": "Create made-by-agent directory"
+      }
+    }
+  ],
+  "num_turns": 4,
+  "stderr": "",
+  "settings_after": "{\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(cat:*)\"\n    ]\n  }\n}",
+  "mkdir_happened": false,
+  "key_in_tmp": []
+}

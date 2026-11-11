@@ -1,0 +1,22 @@
+1. Create GEMINI.md files to customize your interactions
+2. /help for more information
+3. Ask coding questions, edit code or run commands
+4. Be specific for the best results
+ℹ Update successful! The new version will be used on your next run.
+╭──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│                                                                                                                                          │
+│ ? Get started                                                                                                                            │
+│                                                                                                                                          │
+│   How would you like to authenticate for this project?                                                                                   │
+│                                                                                                                                          │
+│   ● 1. Sign in with Google                                                                                                               │
+│     2. Use Gemini API Key                                                                                                                │
+│     3. Vertex AI                                                                                                                         │
+│                                                                                                                                          │
+│   (Use Enter to select)                                                                                                                  │
+│                                                                                                                                          │
+│   Terms of Services and Privacy Notice for Gemini CLI                                                                                    │
+│                                                                                                                                          │
+│   https://geminicli.com/docs/resources/tos-privacy/                                                                                      │
+│                                                                                                                                          │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
