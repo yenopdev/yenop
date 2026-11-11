@@ -4,7 +4,7 @@ import { spawnSync, spawn } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { requireResultsDir, refuseIfExists, operatorRuleCheck } from "./guards.mjs";
+import { requireResultsDir, refuseIfExists, operatorRuleCheck, makeRedactor } from "./guards.mjs";
 
 const DRIVER = fileURLToPath(new URL("./run-05b.mjs", import.meta.url));
 const scratch = () => mkdtempSync(join(tmpdir(), "guards-"));
@@ -107,5 +107,38 @@ describe("pilot driver guards (subprocess, no runtime, no model)", () => {
     expect(rec.execution_result).toBe("NOT_EXECUTED"); // nothing ran, nothing changed
     expect(rec.cleanup.tmp_removed).toBe(true);
     rmSync(home, { recursive: true, force: true }); rmSync(results, { recursive: true, force: true });
+  });
+});
+
+describe("makeRedactor: whole values and the prefixes strace truncation leaves behind", () => {
+  const key = "sk-test-0123456789abcdefghijklmnopqrstuvwxyz";
+  const redact = makeRedactor({ secrets: [key], home: "/home/alice.guest", user: "alice.guest" });
+
+  it("replaces whole keys, the home directory and the user name", () => {
+    expect(redact(`KEY=${key} cd /home/alice.guest/x; owner alice.guest`)).toBe("KEY=<REDACTED> cd <HOME>/x; owner <user>");
+  });
+
+  it("replaces a home prefix cut off at a truncation marker (the Series 5 case)", () => {
+    const line = 'read(3, "PATH=/var/tmp/arg0:<HOME>/.npm-global/bin:/home/alic"..., 1264) = 507';
+    expect(redact(line)).toBe('read(3, "PATH=/var/tmp/arg0:<HOME>/.npm-global/bin:<HOME>"..., 1264) = 507');
+  });
+
+  it("replaces a key prefix of eight or more characters cut off at a truncation marker", () => {
+    expect(redact(`write(1, "export K=${key.slice(0, 20)}"..., 300) = 300`)).toBe('write(1, "export K=<REDACTED>"..., 300) = 300');
+  });
+
+  it("leaves ordinary paths and short coincidental prefixes alone", () => {
+    for (const s of [
+      'openat(AT_FDCWD, "/var/tmp/pilot/x/home/.codex/config.toml", O_RDONLY) = 3',
+      'read(3, "see /home/"..., 10) = 10',          // only the parent: not the operator's home
+      'read(3, "token sk-tes"..., 10) = 10',        // a key prefix shorter than eight characters
+      'read(3, "unrelated text"..., 10) = 10',
+    ]) expect(redact(s)).toBe(s);
+  });
+
+  it("handles every truncation marker on a line and text with none", () => {
+    expect(redact('a "/home/alice"... b "x"... c "/home/al"...')).toBe('a "<HOME>"... b "x"... c "<HOME>"...');
+    expect(redact("no markers here")).toBe("no markers here");
+    expect(redact(undefined)).toBe("");
   });
 });

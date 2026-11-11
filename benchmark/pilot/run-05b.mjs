@@ -16,7 +16,7 @@ import { join, relative, dirname, basename, resolve } from "node:path";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { extractEvents, derivePathFields, mergeResolutionFields } from "./paths.mjs";
-import { requireResultsDir, refuseIfExists, operatorRuleCheck } from "./guards.mjs";
+import { requireResultsDir, refuseIfExists, operatorRuleCheck, makeRedactor } from "./guards.mjs";
 import { inventoryTree, inventoryTempRoot, diffInventories, classifyIsolation, newScenarioToken } from "./isolation.mjs";
 import { traceAvailable, traceLaunch, parseStrace, assignRoles, analyzeTrace, resolveRuntimeAnchor, processTree } from "./trace.mjs";
 
@@ -43,7 +43,7 @@ const keys = {};
 if (keysFile && existsSync(keysFile)) for (const l of readFileSync(keysFile, "utf8").split("\n")) { const m = /^([A-Z_]+)=(.+)$/.exec(l.trim()); if (m) keys[m[1]] = m[2]; }
 const secrets = Object.values(keys).filter((v) => v.length >= 8);
 const USER = basename(homedir());
-const redact = (s) => { let t = String(s ?? ""); for (const v of secrets) t = t.split(v).join("<REDACTED>"); t = t.split(homedir()).join("<HOME>"); if (USER.length >= 4) t = t.split(USER).join("<user>"); return t; };
+const redact = makeRedactor({ secrets, home: homedir(), user: USER });
 
 // ---- fixture ---------------------------------------------------------------------------------------------------
 function buildFixture(proj, token = "secret-original") {
