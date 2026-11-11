@@ -1,0 +1,103 @@
+/* Article: "What Actually Happens When an AI Coding Agent Writes Through a Symlink?"
+   Presentation only. Everything here is scoped to .post.investigation and layers on the site stylesheet. */
+
+.post.investigation{
+  --sp-1:8px;--sp-2:16px;--sp-3:24px;--sp-4:40px;--sp-5:64px;--sp-6:104px;
+  --ink:#C9D3DD;--ink-strong:var(--fg);--ink-soft:var(--muted);--ink-faint:var(--dim);
+  --rule:var(--line);--accent:var(--ask);--runtime:#7FB2E5;--child:#B38BF2;
+  max-width:min(68ch,100%);padding-block:var(--sp-5) var(--sp-6);
+}
+
+/* ---- hero ---------------------------------------------------------------------------------------------------- */
+.post.investigation .hero-post{padding:var(--sp-3) 0 var(--sp-5);border-bottom:1px solid var(--rule);margin-bottom:var(--sp-5)}
+.post.investigation .hero-post .eyebrow{margin:0 0 var(--sp-3)}
+.post.investigation .hero-post h1{font-size:clamp(34px,5vw,54px);line-height:1.06;font-weight:500;letter-spacing:-.025em;margin:0 0 var(--sp-3);max-width:none;text-wrap:balance;color:var(--ink-strong)}
+.post.investigation .hero-post .lede{font-size:clamp(18px,2vw,21px);line-height:1.5;color:var(--ink-soft);max-width:58ch;margin:0 0 var(--sp-4)}
+.post.investigation .meta{display:flex;flex-wrap:wrap;gap:8px 22px;font-family:"IBM Plex Mono",monospace;font-size:12px;letter-spacing:.04em;color:var(--ink-faint);margin:0;padding:0;list-style:none}
+.post.investigation .meta li+li::before{content:"";display:inline-block;width:4px;height:4px;border-radius:50%;background:var(--ink-faint);margin-right:22px;vertical-align:middle;opacity:.7}
+
+/* ---- section rhythm -------------------------------------------------------------------------------------------- */
+.post.investigation h2{font-size:clamp(23px,2.6vw,28px);line-height:1.2;font-weight:500;letter-spacing:-.015em;color:var(--ink-strong);margin:var(--sp-6) 0 var(--sp-3);text-wrap:balance}
+.post.investigation h2 .num{display:block;font-family:"IBM Plex Mono",monospace;font-size:12px;letter-spacing:.14em;font-weight:400;color:var(--accent);margin-bottom:10px}
+.post.investigation h2 .num .dot{display:none}
+.post.investigation h2 + p{margin-top:0}
+.post.investigation p{color:var(--ink);font-size:17px;line-height:1.7;margin:0 0 var(--sp-3)}
+.post.investigation p b{color:var(--ink-strong);font-weight:600}
+.post.investigation code{font-family:"IBM Plex Mono",monospace;font-size:.88em;background:rgba(230,237,243,.055);border:0;border-radius:4px;padding:1px 5px;color:var(--ink-strong)}
+
+/* chapters: the three runtime sections */
+.post.investigation .chapter{margin-top:var(--sp-6);padding-top:var(--sp-4);border-top:1px solid var(--rule)}
+.post.investigation .chapter::before{content:attr(data-kicker);display:block;font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint)}
+.post.investigation .chapter h2{margin-top:var(--sp-2)}
+.post.investigation .chapter h2 .num{display:none}
+.post.investigation p.arm{margin-top:var(--sp-4)}
+.post.investigation p.arm b.armlabel{display:block;font-family:"IBM Plex Mono",monospace;font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:500;color:var(--accent);margin-bottom:10px}
+.post.investigation p.arm b.armlabel .dot{display:none}
+
+/* ---- evidence: quotes, code, callouts --------------------------------------------------------------------------- */
+.post.investigation blockquote{margin:0}
+.post.investigation blockquote.q{position:relative;margin:var(--sp-3) 0 var(--sp-4);padding:18px 20px 16px;background:var(--panel);border:1px solid var(--rule);border-radius:8px;color:var(--ink-strong);font-family:"IBM Plex Mono",monospace;font-size:14px;line-height:1.6;white-space:normal;overflow-wrap:anywhere}
+.post.investigation blockquote.q::before{display:block;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:10px}
+.post.investigation blockquote.q.prompt::before{content:"the task"}
+.post.investigation blockquote.q.result::before{content:"tool result returned to the agent"}
+.post.investigation blockquote.q code{background:transparent;padding:0;color:var(--accent)}
+
+.post.investigation figure.evidence{margin:var(--sp-4) 0}
+.post.investigation figure.evidence pre.out{margin:0;padding:18px 20px;background:var(--panel);border:1px solid var(--rule);border-radius:8px;font-size:13px;line-height:1.7;color:var(--ink);overflow-x:auto;max-width:100%}
+.post.investigation figure.evidence figcaption{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);margin:0 0 10px}
+
+/* ---- pull quotes ----------------------------------------------------------------------------------------------- */
+.post.investigation blockquote.pull{margin:var(--sp-5) 0;padding:var(--sp-3) 0 0;border-top:2px solid var(--accent);border-left:0;background:transparent;max-width:30ch;font-size:clamp(24px,3vw,32px);line-height:1.22;letter-spacing:-.02em;font-weight:400;color:var(--ink-strong);text-wrap:balance}
+.post.investigation blockquote.pull b{font-weight:400}
+.post.investigation blockquote.pull.final{margin-top:var(--sp-5);font-size:clamp(28px,3.6vw,38px);max-width:24ch}
+
+/* ---- figures --------------------------------------------------------------------------------------------------- */
+.post.investigation figure.fig{margin:var(--sp-4) 0 var(--sp-5)}
+.post.investigation figure.fig .frame{padding:26px 28px 20px;background:var(--panel);border:1px solid var(--rule);border-radius:10px;overflow-x:auto}
+.post.investigation figure.fig svg{display:block;width:100%;height:auto;max-width:100%;min-width:420px}
+.post.investigation figure.fig figcaption{margin-top:12px;font-size:13.5px;line-height:1.55;color:var(--ink-faint);max-width:60ch}
+
+/* ---- tables ---------------------------------------------------------------------------------------------------- */
+.post.investigation .tbl{margin:var(--sp-3) 0 var(--sp-4);max-width:100%;overflow-x:auto;border:1px solid var(--rule);border-radius:8px}
+.post.investigation table{width:100%;border-collapse:collapse;font-size:14px;margin:0}
+.post.investigation th{font-family:"IBM Plex Mono",monospace;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;font-weight:500;color:var(--ink-faint);text-align:left;padding:12px 14px;border-bottom:1px solid var(--rule);background:var(--panel);white-space:nowrap;vertical-align:bottom}
+.post.investigation td{padding:13px 14px;border-bottom:1px solid var(--rule);color:var(--ink-soft);line-height:1.5;vertical-align:top;white-space:normal;min-width:9ch}
+.post.investigation tr:last-child td{border-bottom:0}
+.post.investigation td.rowhead{color:var(--ink-strong);font-weight:500;white-space:nowrap}
+.post.investigation td b{color:var(--ink-strong);font-weight:600}
+.post.investigation td code{font-size:.86em;background:transparent;padding:0;color:var(--ink-strong)}
+.post.investigation .tbl.compare td.rowhead{white-space:normal;color:var(--ink-soft);font-weight:400;font-size:13px;min-width:12ch}
+.post.investigation .tbl.compare td{min-width:16ch}
+
+/* ---- lists & limitations --------------------------------------------------------------------------------------- */
+.post.investigation ul.plain{color:var(--ink);font-size:17px;line-height:1.7;margin:0 0 var(--sp-3);padding-left:22px}
+.post.investigation ul.limits{list-style:none;padding:0;margin:var(--sp-3) 0 var(--sp-4);counter-reset:lim}
+.post.investigation ul.limits li{position:relative;padding:18px 0 18px 56px;border-top:1px solid var(--rule);font-size:16px;line-height:1.65;color:var(--ink-soft)}
+.post.investigation ul.limits li:last-child{border-bottom:1px solid var(--rule)}
+.post.investigation ul.limits li::before{counter-increment:lim;content:counter(lim,decimal-leading-zero);position:absolute;left:0;top:19px;font-family:"IBM Plex Mono",monospace;font-size:12px;letter-spacing:.08em;color:var(--accent)}
+.post.investigation ul.limits li b{display:block;color:var(--ink-strong);font-weight:600;margin-bottom:4px}
+
+/* ---- closing --------------------------------------------------------------------------------------------------- */
+.post.investigation .closing{margin-top:var(--sp-5);padding-top:var(--sp-3);border-top:1px solid var(--rule)}
+.post.investigation .closing h2{margin-top:var(--sp-4)}
+.post.investigation hr{border:0;border-top:1px solid var(--rule);margin:var(--sp-5) 0 var(--sp-4)}
+.post.investigation p.colophon{font-size:14px;line-height:1.65;color:var(--ink-faint)}
+.post.investigation p.colophon i{font-style:normal}
+.post.investigation p.colophon code{font-size:.9em;background:transparent;padding:0;color:var(--ink-soft)}
+
+/* ---- narrow screens -------------------------------------------------------------------------------------------- */
+@media (max-width:640px){
+  .post.investigation{--sp-5:48px;--sp-6:72px;padding-block:var(--sp-4) var(--sp-5)}
+  .post.investigation .hero-post{padding-bottom:var(--sp-4);margin-bottom:var(--sp-4)}
+  .post.investigation p,.post.investigation ul.plain{font-size:16px;line-height:1.65}
+  .post.investigation p,.post.investigation li,.post.investigation td,.post.investigation th,.post.investigation figcaption,.post.investigation blockquote{overflow-wrap:anywhere}
+  .post.investigation code{overflow-wrap:anywhere;word-break:break-word}
+  .post.investigation blockquote.q{font-size:13px;padding:14px 16px 12px}
+  .post.investigation blockquote.pull{font-size:23px;max-width:none}
+  .post.investigation blockquote.pull.final{font-size:26px}
+  .post.investigation table{font-size:13px}
+  .post.investigation td,.post.investigation th{padding:10px 10px}
+  .post.investigation ul.limits li{padding-left:40px;font-size:15px}
+  .post.investigation figure.evidence pre.out{font-size:12px;padding:14px 16px}
+  .post.investigation figure.fig .frame{padding:16px 16px 12px}
+}
